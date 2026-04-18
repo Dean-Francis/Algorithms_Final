@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CLO-4 — Line Segment Intersection &amp; Sweep Line</title>
+  <style>
+
+    /* ═══════════════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════════════ */
+    :root {
+      --accent:          #0288D1;
+      --accent-dim:      rgba(2,136,209,0.20);
+      --accent-glow:     rgba(2,136,209,0.35);
+
+      --font-ui:   -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+
+      --text-xs:   0.70rem;
+      --text-sm:   0.813rem;
+      --text-base: 0.9375rem;
+      --text-lg:   1.0625rem;
+      --text-xl:   1.25rem;
+      --text-2xl:  1.625rem;
+
+      --sp-xs:  4px;
+      --sp-sm:  8px;
+      --sp-md:  16px;
+      --sp-lg:  24px;
+      --sp-xl:  48px;
+
+      --radius-sm:   6px;
+      --radius-md:   10px;
+      --radius-lg:   14px;
+      --radius-pill: 999px;
+
+      --ease:        cubic-bezier(0.25, 0.1, 0.25, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --dur-fast:    150ms;
+      --dur-normal:  300ms;
+      --dur-slow:    500ms;
+    }
+
+    [data-theme="dark"] {
+      --bg-base:     #0A0A0A;
+      --bg-surface:  #141414;
+      --bg-elevated: #1C1C1E;
+      --bg-hover:    #242426;
+      --border:       rgba(255, 255, 255, 0.07);
+      --border-focus: var(--accent);
+      --text-primary:   #F2F2F7;
+      --text-secondary: #8E8E93;
+      --text-muted:     #48484A;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.7);
+      --glass-bg:     rgba(14, 14, 14, 0.75);
+      --glass-border: rgba(255, 255, 255, 0.09);
+    }
+
+    [data-theme="light"] {
+      --bg-base:     #F2F2F7;
+      --bg-surface:  #FFFFFF;
+      --bg-elevated: #E8E8ED;
+      --bg-hover:    #E0E0E5;
+      --border:       rgba(0, 0, 0, 0.10);
+      --border-focus: var(--accent);
+      --text-primary:   #1C1C1E;
+      --text-secondary: #48484A;
+      --text-muted:     #8E8E93;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.12);
+      --glass-bg:     rgba(242, 242, 247, 0.88);
+      --glass-border: rgba(0, 0, 0, 0.10);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 16px; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      transition: background var(--dur-normal) var(--ease), color var(--dur-normal) var(--ease);
+      overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       NAV RAIL
+    ═══════════════════════════════════════════════════ */
+    .nav-rail {
+      position: fixed; top: 0; left: 0;
+      height: 100vh; width: 48px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-right: 1px solid var(--glass-border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: var(--sp-lg) 0; z-index: 200; overflow: hidden;
+      transition: width var(--dur-normal) var(--ease);
+    }
+    .nav-rail:hover { width: 224px; }
+
+    .nav-logo-row {
+      display: flex; align-items: center;
+      width: 100%; padding: 0 10px;
+      gap: var(--sp-sm); flex-shrink: 0;
+    }
+    .nav-logo {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      background: none; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; overflow: hidden;
+    }
+    .nav-logo-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+      color: var(--text-primary); white-space: nowrap;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-logo-label { opacity: 1; }
+
+    .nav-sep {
+      width: calc(100% - 20px); height: 1px;
+      background: var(--border); margin: 14px 0; flex-shrink: 0;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-sep { opacity: 1; }
+
+    .nav-item {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md); cursor: pointer;
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+      color: var(--text-secondary); position: relative;
+      text-decoration: none;
+    }
+    .nav-item:hover  { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+    .nav-item.active::before {
+      content: ''; position: absolute; left: 0; top: 50%;
+      transform: translateY(-50%);
+      width: 3px; height: 18px;
+      background: var(--accent); border-radius: var(--radius-pill);
+    }
+
+    .nav-icon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .nav-label {
+      font-size: var(--text-sm); font-weight: 500;
+      white-space: nowrap; opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-label { opacity: 1; }
+    .nav-spacer { flex: 1; }
+
+    .nav-theme-btn {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md);
+      cursor: pointer; background: none; border: none;
+      color: var(--text-secondary); font-family: var(--font-ui);
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+    }
+    .nav-theme-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    [data-theme="light"] .nav-rail { background: var(--bg-surface); border-right: 1px solid var(--border); }
+
+    /* ═══════════════════════════════════════════════════
+       VIZ HERO
+    ═══════════════════════════════════════════════════ */
+    .viz-hero {
+      margin-left: 48px; height: 100vh;
+      position: relative; display: flex; flex-direction: column;
+      background: var(--bg-base); overflow: hidden;
+    }
+
+    .viz-hero__title-block {
+      position: absolute; top: var(--sp-lg); left: var(--sp-lg);
+      z-index: 10; display: flex; flex-direction: column; gap: 5px;
+      pointer-events: none;
+    }
+
+    .viz-hero__badge {
+      font-size: var(--text-xs); font-weight: 600;
+      letter-spacing: 0.6px; text-transform: uppercase;
+      color: var(--accent); background: var(--accent-dim);
+      padding: 3px 9px; border-radius: var(--radius-pill); width: fit-content;
+    }
+
+    .viz-hero__title {
+      font-size: var(--text-2xl); font-weight: 700;
+      letter-spacing: -0.5px; color: var(--text-primary); line-height: 1.2;
+    }
+
+    .viz-hero__subtitle { font-size: var(--text-sm); color: var(--text-secondary); }
+
+    .viz-hero__status {
+      position: absolute; top: var(--sp-lg); right: var(--sp-lg); z-index: 10;
+    }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: var(--text-xs); font-weight: 600;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      padding: 5px 12px; border-radius: var(--radius-pill);
+      background: var(--glass-bg); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      color: var(--text-muted); transition: color var(--dur-normal) var(--ease);
+    }
+
+    .status-badge.ready   { color: #90CAF9; }
+    .status-badge.playing { color: #4CAF50; }
+    .status-badge.paused  { color: #FFC107; }
+    .status-badge.done    { color: var(--accent); }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+    }
+
+    .status-badge.playing .status-dot { animation: pulse-dot 1.2s ease infinite; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    .viz-canvas {
+      flex: 1; width: 100%; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .viz-canvas > svg  { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .viz-canvas > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .viz-idle-hint {
+      display: flex; flex-direction: column; align-items: center;
+      gap: var(--sp-sm); color: var(--text-muted);
+      pointer-events: none; user-select: none;
+    }
+
+    .viz-idle-hint__icon { font-size: 3.5rem; opacity: 0.15; }
+    .viz-idle-hint__text { font-size: var(--text-sm); font-weight: 500; }
+
+    /* Floating pill */
+    .viz-controls-pill {
+      position: absolute; bottom: var(--sp-xl); left: 50%;
+      transform: translateX(-50%); z-index: 20;
+      display: flex; align-items: center; gap: var(--sp-sm);
+      padding: 10px 20px;
+      background: var(--glass-bg); backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-elevated);
+      opacity: 0; transition: opacity var(--dur-normal) var(--ease);
+      white-space: nowrap;
+    }
+
+    .viz-hero:hover .viz-controls-pill,
+    .viz-controls-pill:focus-within,
+    .viz-controls-pill.pinned { opacity: 1; }
+
+    .pill-divider { width: 1px; height: 18px; background: var(--glass-border); flex-shrink: 0; }
+
+    .pill-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 5px; font-family: var(--font-ui);
+      font-size: var(--text-xs); font-weight: 600;
+      border: none; border-radius: var(--radius-pill); cursor: pointer;
+      padding: 6px 13px;
+      transition: background var(--dur-fast) var(--ease),
+                  opacity var(--dur-fast) var(--ease),
+                  transform var(--dur-fast) var(--ease-spring);
+      background: transparent; color: var(--text-primary); letter-spacing: 0.2px;
+    }
+
+    .pill-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); }
+    [data-theme="light"] .pill-btn:hover:not(:disabled) { background: rgba(0,0,0,0.06); }
+    .pill-btn:active:not(:disabled) { transform: scale(0.93); }
+    .pill-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .pill-btn--primary { background: var(--accent); color: #fff; }
+    .pill-btn--primary:hover:not(:disabled) { filter: brightness(0.85); background: var(--accent); }
+    .pill-btn-icon { font-size: 12px; }
+
+    .pill-step-counter {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--text-secondary); min-width: 46px; text-align: center;
+    }
+
+    .pill-speed-row { display: flex; align-items: center; gap: var(--sp-xs); }
+
+    .pill-speed-label {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--accent); min-width: 26px; text-align: right;
+    }
+
+    .pill-slider {
+      -webkit-appearance: none; appearance: none;
+      width: 70px; height: 3px; background: var(--glass-border);
+      border-radius: var(--radius-pill); outline: none; cursor: pointer;
+    }
+
+    .pill-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+      transition: transform var(--dur-fast) var(--ease-spring);
+    }
+    .pill-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+    .pill-legend { display: flex; align-items: center; gap: var(--sp-md); }
+    .pill-legend-item {
+      display: flex; align-items: center; gap: 4px;
+      font-size: var(--text-xs); color: var(--text-secondary);
+    }
+    .pill-legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    .scroll-hint {
+      position: absolute; bottom: var(--sp-lg); right: var(--sp-lg);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      color: var(--text-muted); font-size: var(--text-xs);
+      animation: bounce 2s ease infinite;
+      pointer-events: none; user-select: none;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50%       { transform: translateY(6px); opacity: 0.9; }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       BELOW FOLD
+    ═══════════════════════════════════════════════════ */
+    .below-fold {
+      display: flex; flex-direction: column; gap: var(--sp-md);
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-xl);
+      margin-left: 48px;
+    }
+
+    .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-md); }
+
+    .panel {
+      background: var(--bg-surface); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card); border: 1px solid var(--border); overflow: hidden;
+    }
+
+    .panel-header { padding: var(--sp-sm) var(--sp-md); border-bottom: 1px solid var(--border); }
+    .panel-title {
+      font-size: var(--text-xs); font-weight: 600;
+      letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted);
+    }
+    .panel-body { padding: var(--sp-md); }
+
+    /* Pseudocode */
+    .pseudocode-block {
+      font-family: var(--font-mono); font-size: var(--text-sm);
+      line-height: 1.9; background: var(--bg-elevated);
+      border-radius: var(--radius-md); padding: var(--sp-sm) var(--sp-md);
+      overflow-x: auto;
+    }
+
+    .code-line {
+      display: flex; gap: var(--sp-md);
+      padding: 1px var(--sp-xs); border-radius: var(--radius-sm);
+      cursor: default; transition: background var(--dur-fast) var(--ease);
+      position: relative;
+    }
+    .code-line:hover { background: var(--bg-hover); }
+    .code-line.active { background: var(--accent-dim); color: var(--accent); }
+    .code-line.active::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+      width: 2px; background: var(--accent); border-radius: var(--radius-pill);
+    }
+    .line-num {
+      color: var(--text-muted); min-width: 18px; text-align: right;
+      user-select: none; flex-shrink: 0;
+    }
+
+    .code-line[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute; left: 100%; top: 50%;
+      transform: translateY(-50%); margin-left: var(--sp-sm);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: var(--sp-xs) var(--sp-sm);
+      font-size: var(--text-xs); color: var(--text-secondary);
+      white-space: nowrap; z-index: 50; box-shadow: var(--shadow-elevated);
+      font-family: var(--font-ui); pointer-events: none;
+    }
+
+    /* Explanation box */
+    .explanation-box {
+      background: var(--bg-elevated); border-radius: var(--radius-md);
+      border-left: 3px solid var(--accent); padding: var(--sp-md);
+      font-size: var(--text-sm); color: var(--text-secondary);
+      line-height: 1.75; min-height: 52px;
+    }
+    .explanation-box strong { color: var(--text-primary); }
+    .explanation-box .mono {
+      font-family: var(--font-mono); color: var(--accent); font-size: var(--text-xs);
+    }
+
+    /* Collapsible */
+    .collapsible {
+      background: var(--bg-surface); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card); border: 1px solid var(--border); overflow: hidden;
+    }
+    .collapsible-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-md) var(--sp-lg); cursor: pointer; user-select: none;
+      transition: background var(--dur-fast) var(--ease);
+    }
+    .collapsible-header:hover { background: var(--bg-hover); }
+    .collapsible-header-left { display: flex; align-items: center; gap: var(--sp-sm); }
+    .collapsible-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+    .collapsible-hint  { font-size: var(--text-xs); color: var(--text-muted); }
+    .collapsible-chevron {
+      color: var(--text-muted); font-size: 11px;
+      transition: transform var(--dur-normal) var(--ease);
+    }
+    .collapsible.open .collapsible-chevron { transform: rotate(90deg); }
+    .collapsible-body { max-height: 0; overflow: hidden; transition: max-height var(--dur-slow) var(--ease); }
+    .collapsible.open .collapsible-body { max-height: 4000px; }
+    .collapsible-inner { padding: 0 var(--sp-lg) var(--sp-lg); border-top: 1px solid var(--border); }
+
+    /* Input */
+    .input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-md); margin-top: var(--sp-md); }
+    .input-grid--1col { grid-template-columns: 1fr; }
+    .input-group { display: flex; flex-direction: column; gap: var(--sp-xs); }
+    .input-label {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .input-field {
+      font-family: var(--font-mono); font-size: var(--text-base);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 8px 12px;
+      color: var(--text-primary); outline: none; width: 100%;
+      transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+    }
+    .input-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+    .presets-row {
+      display: flex; gap: var(--sp-sm); flex-wrap: wrap;
+      margin-top: var(--sp-md); align-items: center;
+    }
+    .presets-label {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .preset-btn {
+      font-size: var(--text-xs); font-weight: 500; padding: 5px 11px;
+      border-radius: var(--radius-pill); background: var(--bg-elevated);
+      border: 1px solid var(--border); color: var(--text-secondary);
+      cursor: pointer; font-family: var(--font-ui);
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+    }
+    .preset-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+    /* Stats */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--sp-md); margin-top: var(--sp-md);
+    }
+    .stat-card {
+      background: var(--bg-elevated); border-radius: var(--radius-md);
+      padding: var(--sp-md); display: flex; flex-direction: column; gap: 4px;
+    }
+    .stat-value {
+      font-size: var(--text-xl); font-weight: 700;
+      font-family: var(--font-mono); color: var(--text-primary);
+    }
+    .stat-label { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; }
+
+    /* History table */
+    .history-wrapper {
+      max-height: 220px; overflow-y: auto;
+      border-radius: var(--radius-md); border: 1px solid var(--border); margin-top: var(--sp-md);
+    }
+    .history-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--text-sm); }
+    .history-table th {
+      text-align: left; padding: var(--sp-sm) var(--sp-md);
+      font-size: var(--text-xs); font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-ui); background: var(--bg-elevated);
+    }
+    .history-table td {
+      padding: var(--sp-sm) var(--sp-md); color: var(--text-secondary);
+      border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background var(--dur-fast) var(--ease);
+    }
+    .history-table tr:hover td   { background: var(--bg-hover); color: var(--text-primary); }
+    .history-table tr.current td { background: var(--accent-dim); color: var(--accent); }
+
+    /* Educational */
+    .edu-content { margin-top: var(--sp-md); display: flex; flex-direction: column; gap: var(--sp-md); }
+    .edu-p { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.7; }
+    .key-concept {
+      background: var(--accent-dim); border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: var(--sp-md) var(--sp-lg);
+    }
+    .key-concept-title {
+      font-size: var(--text-xs); font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px;
+    }
+    .key-concept-body { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6; }
+    .key-concept-body .mono { font-family: var(--font-mono); color: var(--accent); font-size: var(--text-xs); }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: var(--radius-pill); }
+
+    @media (max-width: 768px) {
+      .info-row   { grid-template-columns: 1fr; }
+      .input-grid { grid-template-columns: 1fr 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ─── Part 4 — Line Segment Intersection ──────────── */
+    .p4-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      display: block;
+    }
+    .p4-cp-overlay {
+      position: absolute; bottom: 80px; right: var(--sp-lg);
+      background: var(--glass-bg); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border); border-radius: var(--radius-lg);
+      padding: var(--sp-md); min-width: 220px;
+      font-size: var(--text-sm); display: none;
+    }
+    .p4-cp-overlay.visible { display: block; }
+    .p4-cp-overlay-title {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+    }
+    .p4-cp-result {
+      font-size: var(--text-lg); font-weight: 700; margin-top: 4px;
+    }
+    .p4-stat-accent { color: var(--accent); font-weight: 700; }
+
+  </style>
+</head>
+<body>
+
+  <!-- NAV RAIL -->
+  <nav class="nav-rail">
+    <div class="nav-logo-row">
+      <div class="nav-logo">
+        <img src="maple-logo.jpg" alt="CUD"
+             style="width:36px;height:36px;object-fit:contain;display:block;" />
+      </div>
+      <span class="nav-logo-label">Canadian University Dubai</span>
+    </div>
+    <div class="nav-sep"></div>
+    <a href="index.html"                             class="nav-item"><div class="nav-icon">▦</div><span class="nav-label">Home</span></a>
+    <a href="clo2_parallel_merge_sort.html"          class="nav-item"><div class="nav-icon">⇅</div><span class="nav-label">Parallel Sort</span></a>
+    <a href="clo3_extended_euclidean.html"           class="nav-item"><div class="nav-icon">∑</div><span class="nav-label">Extended GCD</span></a>
+    <a href="clo4_line_segment_intersection.html"    class="nav-item active"><div class="nav-icon">⟋</div><span class="nav-label">Sweep Line</span></a>
+    <a href="clo5_greedy_set_cover.html"             class="nav-item"><div class="nav-icon">⊆</div><span class="nav-label">Set Cover</span></a>
+    <div class="nav-spacer"></div>
+    <button class="nav-theme-btn" id="themeToggle">
+      <div class="nav-icon" id="themeIcon">🌙</div>
+      <span class="nav-label" id="themeLabel">Light Mode</span>
+    </button>
+  </nav>
+
+  <!-- VISUALIZATION HERO -->
+  <section class="viz-hero" id="p4-vizHero">
+    <div class="viz-hero__title-block">
+      <span class="viz-hero__badge">CLO-4</span>
+      <h1 class="viz-hero__title">Line Segment Intersection</h1>
+      <span class="viz-hero__subtitle">Sweep Line · Bentley-Ottmann · Cross-Product Tests</span>
+    </div>
+
+    <div class="viz-hero__status">
+      <div class="status-badge" id="p4-statusBadge">
+        <span class="status-dot"></span>
+        <span id="p4-statusText">Idle</span>
+      </div>
+    </div>
+
+    <div class="viz-canvas" id="p4-vizCanvas">
+      <div class="viz-idle-hint" id="p4-vizIdleHint">
+        <div class="viz-idle-hint__icon">⟋</div>
+        <div class="viz-idle-hint__text">Press Build to begin</div>
+      </div>
+      <canvas id="p4-canvas" class="p4-canvas" style="display:none;"></canvas>
+      <div class="p4-cp-overlay" id="p4-cpOverlay">
+        <div class="p4-cp-overlay-title">Cross-Product Test</div>
+        <div id="p4-cpDetail" style="font-size:var(--text-xs);color:var(--text-secondary);line-height:1.7;"></div>
+        <div class="p4-cp-result" id="p4-cpResult"></div>
+      </div>
+    </div>
+
+    <!-- Floating pill controls -->
+    <div class="viz-controls-pill" id="p4-controlsPill">
+
+      <button class="pill-btn pill-btn--primary" id="p4-btnBuild">
+        <span class="pill-btn-icon">⚙</span> Build
+      </button>
+
+      <div class="pill-divider"></div>
+
+      <button class="pill-btn" id="p4-btnBack" disabled>
+        <span class="pill-btn-icon">←</span>
+      </button>
+      <button class="pill-btn" id="p4-btnStep" disabled>
+        <span class="pill-btn-icon">→</span> Step
+      </button>
+      <button class="pill-btn" id="p4-btnPlay" disabled>
+        <span class="pill-btn-icon">▶</span> Play
+      </button>
+      <button class="pill-btn" id="p4-btnPause" disabled>
+        <span class="pill-btn-icon">⏸</span>
+      </button>
+      <button class="pill-btn" id="p4-btnReset" disabled>
+        <span class="pill-btn-icon">↺</span>
+      </button>
+
+      <div class="pill-divider"></div>
+
+      <div class="pill-speed-row">
+        <input type="range" class="pill-slider" id="p4-speedSlider"
+               min="0.25" max="4" step="0.25" value="1" />
+        <span class="pill-speed-label" id="p4-speedValue">1×</span>
+      </div>
+
+      <div class="pill-divider"></div>
+
+      <span class="pill-step-counter" id="p4-stepCounter">— / —</span>
+
+      <div class="pill-divider"></div>
+
+      <div class="pill-legend">
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:#4FC3F7;"></div>
+          Left endpoint
+        </div>
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:#ef9a9a;"></div>
+          Right endpoint
+        </div>
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:#FFD600;"></div>
+          Intersection
+        </div>
+      </div>
+
+    </div>
+
+    <div class="scroll-hint">
+      <span>scroll</span>
+      <span>↓</span>
+    </div>
+  </section>
+
+  <div class="below-fold">
+
+    <!-- Pseudocode + Step explanation -->
+    <div class="info-row">
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Pseudocode</span></div>
+        <div class="panel-body">
+          <div class="pseudocode-block">
+            <div class="code-line" id="p4-pline-1" data-tip="Initialize event queue with all endpoints">
+              <span class="line-num">1</span>
+              <span><b>function</b> SweepLineIntersect(S)</span>
+            </div>
+            <div class="code-line" id="p4-pline-2" data-tip="Insert left and right endpoints for every segment">
+              <span class="line-num">2</span>
+              <span>&nbsp;&nbsp;Q ← event queue (left/right endpoints of all segs)</span>
+            </div>
+            <div class="code-line" id="p4-pline-3" data-tip="Active set T orders segments by y at current sweep x">
+              <span class="line-num">3</span>
+              <span>&nbsp;&nbsp;T ← empty active-segment BST &nbsp;&nbsp;// ordered by y</span>
+            </div>
+            <div class="code-line" id="p4-pline-4" data-tip="Process events left to right">
+              <span class="line-num">4</span>
+              <span>&nbsp;&nbsp;<b>while</b> Q ≠ ∅ <b>do</b></span>
+            </div>
+            <div class="code-line" id="p4-pline-5" data-tip="Extract the leftmost event by x-coordinate">
+              <span class="line-num">5</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;e ← Q.extractMin() &nbsp;&nbsp;// next event by x</span>
+            </div>
+            <div class="code-line" id="p4-pline-6" data-tip="Left endpoint: insert segment and test with neighbors">
+              <span class="line-num">6</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b> e is LEFT endpoint</span>
+            </div>
+            <div class="code-line" id="p4-pline-7" data-tip="Insert e.seg into BST ordered by y-coordinate at sweep x">
+              <span class="line-num">7</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;insert e.seg into T; test with neighbors</span>
+            </div>
+            <div class="code-line" id="p4-pline-8" data-tip="If neighbors intersect ahead of sweep, add event to Q">
+              <span class="line-num">8</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b> intersection found → add to Q</span>
+            </div>
+            <div class="code-line" id="p4-pline-9" data-tip="Right endpoint: test remaining neighbors then remove">
+              <span class="line-num">9</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;<b>elif</b> e is RIGHT endpoint</span>
+            </div>
+            <div class="code-line" id="p4-pline-10" data-tip="New adjacency created — test them for future intersection">
+              <span class="line-num">10</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;test e.seg's neighbors; remove e.seg from T</span>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--border);margin:var(--sp-sm) 0;"></div>
+          <div style="font-size:var(--text-xs);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:var(--sp-xs);">Cross-Product Orientation Test</div>
+          <div class="pseudocode-block">
+            <div class="code-line" data-tip="Given three points p, q, r — compute signed cross product">
+              <span class="line-num">1</span>
+              <span><b>function</b> orientation(p, q, r)</span>
+            </div>
+            <div class="code-line" data-tip="Cross product of vectors (q−p) and (r−q)">
+              <span class="line-num">2</span>
+              <span>&nbsp;&nbsp;val ← (q.y−p.y)(r.x−q.x) − (q.x−p.x)(r.y−q.y)</span>
+            </div>
+            <div class="code-line" data-tip="val > 0 means clockwise turn">
+              <span class="line-num">3</span>
+              <span>&nbsp;&nbsp;<b>if</b> val &gt; 0 → Clockwise</span>
+            </div>
+            <div class="code-line" data-tip="val < 0 means counter-clockwise turn">
+              <span class="line-num">4</span>
+              <span>&nbsp;&nbsp;<b>if</b> val &lt; 0 → Counter-Clockwise</span>
+            </div>
+            <div class="code-line" data-tip="val = 0 means the three points are collinear">
+              <span class="line-num">5</span>
+              <span>&nbsp;&nbsp;<b>if</b> val = 0 → Collinear</span>
+            </div>
+            <div class="code-line" data-tip="Two segments intersect if and only if orientations straddle each other">
+              <span class="line-num">6</span>
+              <span><b>segments_intersect</b>(s1,s2): d1≠d2 AND d3≠d4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Step Explanation</span></div>
+        <div class="panel-body">
+          <div class="explanation-box" id="p4-explanationBox">
+            Choose a preset or draw segments in <strong>Input &amp; Presets</strong> below,
+            then press <strong>Build</strong> in the controls above to start the sweep.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Input & Presets -->
+    <div class="collapsible open" id="p4-sectionInput">
+      <div class="collapsible-header" onclick="toggleSection('p4-sectionInput')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Input &amp; Presets</span>
+          <span class="collapsible-hint">Choose a preset or toggle draw mode to place segments</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="presets-row">
+            <span class="presets-label">Presets</span>
+            <button class="preset-btn" onclick="Part4.loadPreset('simple')">Simple (3 seg)</button>
+            <button class="preset-btn" onclick="Part4.loadPreset('grid')">Grid Cross (4 seg)</button>
+            <button class="preset-btn" onclick="Part4.loadPreset('star')">Star Burst (5 seg)</button>
+            <button class="preset-btn" onclick="Part4.loadPreset('noIntersect')">No Intersection</button>
+          </div>
+          <div class="presets-row" style="margin-top:var(--sp-sm);">
+            <span class="presets-label">Draw</span>
+            <button class="preset-btn" id="p4-drawModeBtn" onclick="Part4.toggleDrawMode()">✎ Draw Segments</button>
+            <button class="preset-btn" onclick="Part4.clearSegments()">✕ Clear All</button>
+          </div>
+          <div id="p4-drawTip" style="display:none; margin-top:var(--sp-sm); font-size:var(--text-xs); color:var(--accent);">
+            Click on the canvas above to place the first endpoint, then click again for the second. Each pair = one segment.
+          </div>
+          <div id="p4-segmentList" style="margin-top:var(--sp-sm); font-family:var(--font-mono); font-size:var(--text-xs); color:var(--text-secondary); line-height:1.8;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics & History -->
+    <div class="collapsible" id="p4-sectionStats">
+      <div class="collapsible-header" onclick="toggleSection('p4-sectionStats')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Statistics &amp; History</span>
+          <span class="collapsible-hint">Segments, events processed, intersections found</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-value p4-stat-accent" id="p4-statN">—</span>
+              <span class="stat-label">Segments n</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value p4-stat-accent" id="p4-statInts">—</span>
+              <span class="stat-label">Intersections found</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="p4-statBrute">—</span>
+              <span class="stat-label">Brute-force pairs C(n,2)</span>
+            </div>
+          </div>
+          <div class="history-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Event Type</th><th>Segment</th><th>Detail</th>
+                </tr>
+              </thead>
+              <tbody id="p4-historyBody">
+                <tr>
+                  <td colspan="4" style="text-align:center;color:var(--text-muted);font-family:var(--font-ui);">
+                    No steps yet
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Educational Overview -->
+    <div class="collapsible" id="p4-sectionEdu">
+      <div class="collapsible-header" onclick="toggleSection('p4-sectionEdu')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Educational Overview</span>
+          <span class="collapsible-hint">Sweep line, cross-product tests, and complexity analysis</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="edu-content">
+            <p class="edu-p">
+              The <strong>sweep line algorithm</strong> detects all intersections among n line segments
+              more efficiently than brute force. A vertical line sweeps left to right, processing
+              events: left endpoints (insert), right endpoints (remove), and intersections (swap).
+            </p>
+            <div class="key-concept">
+              <div class="key-concept-title">Complexity</div>
+              <div class="key-concept-body">
+                <strong>Brute force:</strong> <span class="mono">O(n²)</span> — test every pair.<br/>
+                <strong>Shamos-Hoey</strong> (detect if any): <span class="mono">O(n log n)</span>.<br/>
+                <strong>Bentley-Ottmann</strong> (report all k): <span class="mono">O((n + k) log n)</span>.<br/>
+                For sparse inputs (k ≪ n²) this gives a dramatic speedup.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Cross-Product Orientation Test</div>
+              <div class="key-concept-body">
+                Given points p, q, r: compute <span class="mono">val = (q−p) × (r−q)</span>.<br/>
+                val &gt; 0 → Clockwise (right turn).<br/>
+                val &lt; 0 → Counter-Clockwise (left turn).<br/>
+                val = 0 → Collinear.<br/><br/>
+                Two segments s1=(A,B) and s2=(C,D) intersect if and only if
+                A and B are on opposite sides of line CD, <em>and</em> C and D are on opposite
+                sides of line AB. This is tested in O(1) per pair.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Active Set (BST)</div>
+              <div class="key-concept-body">
+                The active set T stores currently-crossing segments ordered by their
+                y-coordinate at the sweep line's current x. When a segment is inserted
+                or removed, only its immediate neighbors in T need to be tested — making
+                each event O(log n). A balanced BST (e.g. red-black tree) supports
+                insert, delete, and predecessor/successor in O(log n).
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Worked Example — Two Crossing Segments</div>
+              <div class="key-concept-body">
+                s1: (0.1, 0.3) → (0.9, 0.7) &nbsp; s2: (0.2, 0.7) → (0.8, 0.2)<br/><br/>
+                <strong>Event 1</strong> — LEFT of s1 (x=0.1): insert s1 into T. No neighbors.<br/>
+                <strong>Event 2</strong> — LEFT of s2 (x=0.2): insert s2. Test s1 ∩ s2.<br/>
+                &nbsp;&nbsp;orientation(s1.p, s1.q, s2.p) = CW<br/>
+                &nbsp;&nbsp;orientation(s1.p, s1.q, s2.q) = CCW → straddle → INTERSECT ✓<br/>
+                <strong>Intersection point</strong> added to Q at x≈0.55.<br/>
+                <strong>Events 3–4</strong> — RIGHT endpoints remove segments from T.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+
+    // ═══════════════════════════════════════════════
+    // THEME CONTROLLER
+    // ═══════════════════════════════════════════════
+    const ThemeController = (() => {
+      const KEY = 'cud-theme';
+      function apply(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.getElementById('themeIcon').textContent  = theme === 'dark' ? '🌙' : '☀️';
+        document.getElementById('themeLabel').textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        try { localStorage.setItem(KEY, theme); } catch (_) {}
+        Part4.redraw();
+      }
+      function init() {
+        let saved = 'dark';
+        try { saved = localStorage.getItem(KEY) || 'dark'; } catch (_) {}
+        apply(saved);
+        document.getElementById('themeToggle').addEventListener('click', () => {
+          apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+        });
+      }
+      return { init };
+    })();
+
+    // ═══════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════
+    function toggleSection(id) {
+      document.getElementById(id).classList.toggle('open');
+    }
+
+    function makePillController(heroId, pillId) {
+      const hero = document.getElementById(heroId);
+      const pill = document.getElementById(pillId);
+      let timer = null;
+      function show() {
+        pill.style.opacity = '1';
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!pill.classList.contains('pinned')) pill.style.opacity = '';
+        }, 3000);
+      }
+      hero.addEventListener('mousemove', show);
+      pill.addEventListener('mouseenter', () => { clearTimeout(timer); pill.style.opacity = '1'; });
+      pill.addEventListener('mouseleave', show);
+    }
+
+    // ═══════════════════════════════════════════════
+    // GEOMETRY HELPERS
+    // ═══════════════════════════════════════════════
+    function orientation(px, py, qx, qy, rx, ry) {
+      const val = (qy - py) * (rx - qx) - (qx - px) * (ry - qy);
+      if (Math.abs(val) < 1e-9) return 0;
+      return val > 0 ? 1 : -1;
+    }
+    function onSeg(px, py, qx, qy, rx, ry) {
+      return Math.min(px,qx) <= rx && rx <= Math.max(px,qx) &&
+             Math.min(py,qy) <= ry && ry <= Math.max(py,qy);
+    }
+    function segsIntersect(s1, s2) {
+      const {p,q} = s1, {p:r,q:s} = s2;
+      const d1 = orientation(r.x,r.y,s.x,s.y,p.x,p.y);
+      const d2 = orientation(r.x,r.y,s.x,s.y,q.x,q.y);
+      const d3 = orientation(p.x,p.y,q.x,q.y,r.x,r.y);
+      const d4 = orientation(p.x,p.y,q.x,q.y,s.x,s.y);
+      if (d1!==d2 && d3!==d4) return true;
+      if (d1===0 && onSeg(r.x,r.y,s.x,s.y,p.x,p.y)) return true;
+      if (d2===0 && onSeg(r.x,r.y,s.x,s.y,q.x,q.y)) return true;
+      if (d3===0 && onSeg(p.x,p.y,q.x,q.y,r.x,r.y)) return true;
+      if (d4===0 && onSeg(p.x,p.y,q.x,q.y,s.x,s.y)) return true;
+      return false;
+    }
+    function intersectionPt(s1, s2) {
+      const x1=s1.p.x, y1=s1.p.y, x2=s1.q.x, y2=s1.q.y;
+      const x3=s2.p.x, y3=s2.p.y, x4=s2.q.x, y4=s2.q.y;
+      const d = (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);
+      if (Math.abs(d)<1e-9) return null;
+      const t = ((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/d;
+      return { x: x1+t*(x2-x1), y: y1+t*(y2-y1) };
+    }
+
+    // ═══════════════════════════════════════════════
+    // PART 4 — LINE SEGMENT INTERSECTION
+    // ═══════════════════════════════════════════════
+    const Part4 = (() => {
+
+      const PALETTE = [
+        '#4FC3F7','#81C784','#FFB74D','#F48FB1','#CE93D8',
+        '#80CBC4','#FFCC02','#FF8A65','#90CAF9','#A5D6A7'
+      ];
+
+      const PRESETS = {
+        simple: [[0.1,0.3,0.9,0.7],[0.2,0.7,0.8,0.2],[0.3,0.1,0.6,0.9]],
+        grid:   [[0.15,0.5,0.85,0.5],[0.5,0.1,0.5,0.9],[0.2,0.2,0.8,0.8],[0.2,0.8,0.8,0.2]],
+        star:   [[0.1,0.5,0.9,0.5],[0.5,0.1,0.5,0.9],[0.15,0.15,0.85,0.85],[0.15,0.85,0.85,0.15],[0.1,0.35,0.9,0.65]],
+        noIntersect: [[0.1,0.2,0.4,0.2],[0.1,0.5,0.4,0.5],[0.6,0.3,0.9,0.3],[0.6,0.7,0.9,0.7]]
+      };
+
+      const canvas  = document.getElementById('p4-canvas');
+      const ctx     = canvas.getContext('2d');
+      const PAD     = 50;
+
+      let segments  = [];
+      let steps     = [];
+      let stepIdx   = -1;
+      let playTimer = null;
+      let speed     = 1;
+      let drawMode  = false;
+      let drawFirst = null;
+      let mousePos  = null;
+
+      // Displayed state
+      let sweepX     = null;
+      let activeIds  = new Set();
+      let foundInts  = [];
+      let hlPairs    = [];
+      let cpInfo     = null;
+
+      // ── coordinate helpers ──
+      function toC(nx, ny) {
+        return { x: PAD + nx*(canvas.width-2*PAD), y: PAD + ny*(canvas.height-2*PAD) };
+      }
+      function fromC(cx, cy) {
+        return { x:(cx-PAD)/(canvas.width-2*PAD), y:(cy-PAD)/(canvas.height-2*PAD) };
+      }
+
+      // ── resize ──
+      function resize() {
+        canvas.width  = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        redraw();
+      }
+      window.addEventListener('resize', resize);
+
+      // ── draw ──
+      function redraw() {
+        if (!canvas.width) return;
+        const W=canvas.width, H=canvas.height;
+        const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+        ctx.clearRect(0,0,W,H);
+        ctx.fillStyle = dark ? '#0A0A0A' : '#F2F2F7';
+        ctx.fillRect(0,0,W,H);
+
+        // grid
+        ctx.strokeStyle = dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.05)';
+        ctx.lineWidth = 1;
+        for (let gx=PAD; gx<=W-PAD; gx+=(W-2*PAD)/10) {
+          ctx.beginPath(); ctx.moveTo(gx,PAD); ctx.lineTo(gx,H-PAD); ctx.stroke();
+        }
+        for (let gy=PAD; gy<=H-PAD; gy+=(H-2*PAD)/10) {
+          ctx.beginPath(); ctx.moveTo(PAD,gy); ctx.lineTo(W-PAD,gy); ctx.stroke();
+        }
+
+        // sweep line
+        if (sweepX !== null) {
+          const sx = toC(sweepX,0).x;
+          ctx.save();
+          ctx.strokeStyle='#FF6F00'; ctx.lineWidth=2;
+          ctx.setLineDash([6,4]);
+          ctx.shadowColor='#FF6F00'; ctx.shadowBlur=10;
+          ctx.beginPath(); ctx.moveTo(sx,PAD-10); ctx.lineTo(sx,H-PAD+10); ctx.stroke();
+          ctx.restore();
+          ctx.fillStyle='#FF6F00'; ctx.font='11px monospace'; ctx.textAlign='center';
+          ctx.fillText('x='+sweepX.toFixed(2), sx, PAD-16);
+        }
+
+        // highlight tested pairs
+        for (const [ai,bi] of hlPairs) {
+          const sa=segments[ai], sb=segments[bi];
+          if (!sa||!sb) continue;
+          const pa=toC(sa.p.x,sa.p.y),qa=toC(sa.q.x,sa.q.y);
+          const pb=toC(sb.p.x,sb.p.y),qb=toC(sb.q.x,sb.q.y);
+          ctx.save();
+          ctx.strokeStyle='rgba(2,136,209,0.35)'; ctx.lineWidth=9;
+          ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(qa.x,qa.y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(pb.x,pb.y); ctx.lineTo(qb.x,qb.y); ctx.stroke();
+          ctx.restore();
+        }
+
+        // segments
+        for (let i=0; i<segments.length; i++) {
+          const seg=segments[i];
+          const isActive = activeIds.has(seg.id);
+          const cp=toC(seg.p.x,seg.p.y), cq=toC(seg.q.x,seg.q.y);
+          ctx.save();
+          ctx.lineWidth = isActive ? 3 : 2;
+          ctx.strokeStyle = seg.color;
+          ctx.globalAlpha = isActive ? 1 : 0.65;
+          if (isActive) { ctx.shadowColor=seg.color; ctx.shadowBlur=8; }
+          ctx.beginPath(); ctx.moveTo(cp.x,cp.y); ctx.lineTo(cq.x,cq.y); ctx.stroke();
+          ctx.globalAlpha=1;
+          ctx.fillStyle=seg.color;
+          ctx.beginPath(); ctx.arc(cp.x,cp.y,5,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(cq.x,cq.y,5,0,Math.PI*2); ctx.fill();
+          ctx.font='bold 11px monospace'; ctx.textAlign='center';
+          ctx.fillText('s'+(i+1),(cp.x+cq.x)/2,(cp.y+cq.y)/2-10);
+          ctx.restore();
+        }
+
+        // intersections
+        for (const pt of foundInts) {
+          const cp=toC(pt.x,pt.y);
+          ctx.save();
+          ctx.fillStyle='#FFD600'; ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+          ctx.shadowColor='#FFD600'; ctx.shadowBlur=14;
+          ctx.beginPath(); ctx.arc(cp.x,cp.y,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+
+        // draw ghost line
+        if (drawMode && drawFirst && mousePos) {
+          const cp=toC(drawFirst.x,drawFirst.y), mp=toC(mousePos.x,mousePos.y);
+          ctx.save();
+          ctx.strokeStyle='rgba(2,136,209,0.5)'; ctx.lineWidth=2;
+          ctx.setLineDash([4,4]);
+          ctx.beginPath(); ctx.moveTo(cp.x,cp.y); ctx.lineTo(mp.x,mp.y); ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // ── build steps ──
+      function buildSteps() {
+        steps = [];
+        if (segments.length < 2) return;
+
+        const events = [];
+        for (let i=0; i<segments.length; i++) {
+          const seg=segments[i];
+          let lp=seg.p, rp=seg.q;
+          if (lp.x>rp.x||(lp.x===rp.x&&lp.y>rp.y)) { [lp,rp]=[rp,lp]; }
+          events.push({type:'left',  x:lp.x, y:lp.y, segIdx:i});
+          events.push({type:'right', x:rp.x, y:rp.y, segIdx:i});
+        }
+        events.sort((a,b)=>a.x-b.x||a.y-b.y);
+
+        steps.push({
+          sweepX:null, activeIds:new Set(), ints:[], hlPairs:[], cpInfo:null,
+          expl:'Sweep initialized. Event queue has <strong>'+events.length+' events</strong>.',
+          logRow:{type:'—', seg:'—', detail:'Queue initialized'},
+          pseudoLine:2
+        });
+
+        const active=[], foundPts=[];
+
+        function getY(idx,x) {
+          const s=segments[idx], dx=s.q.x-s.p.x;
+          if(Math.abs(dx)<1e-9) return (s.p.y+s.q.y)/2;
+          return s.p.y+(x-s.p.x)/dx*(s.q.y-s.p.y);
+        }
+        function sortAct(x) { active.sort((a,b)=>getY(a,x)-getY(b,x)); }
+
+        for (let ei=0; ei<events.length; ei++) {
+          const ev=events[ei];
+
+          if (ev.type==='left') {
+            active.push(ev.segIdx);
+            sortAct(ev.x);
+            const pos=active.indexOf(ev.segIdx);
+
+            steps.push({
+              sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[], cpInfo:null,
+              expl:'<strong>LEFT</strong> endpoint of s'+(ev.segIdx+1)+' at x='+ev.x.toFixed(2)+'. Inserted into active set.',
+              logRow:{type:'LEFT', seg:'s'+(ev.segIdx+1), detail:'Inserted, pos='+pos},
+              pseudoLine:7
+            });
+
+            const pairs=[];
+            if(pos>0) pairs.push([active[pos-1], ev.segIdx]);
+            if(pos<active.length-1) pairs.push([ev.segIdx, active[pos+1]]);
+
+            for (const [ai,bi] of pairs) {
+              const sa=segments[ai],sb=segments[bi];
+              const hit=segsIntersect(sa,sb);
+              const d1=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.p.x,sb.p.y);
+              const d2=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.q.x,sb.q.y);
+              const cpD = 'orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.p) = '+(d1>0?'CW':d1<0?'CCW':'Col')+'<br>orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.q) = '+(d2>0?'CW':d2<0?'CCW':'Col');
+
+              steps.push({
+                sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[[ai,bi]],
+                cpInfo:{detail:cpD, result:hit?'INTERSECT ✓':'No intersection', ok:hit},
+                expl:'Testing s'+(ai+1)+' ∩ s'+(bi+1)+': <strong>'+(hit?'INTERSECTION FOUND':'no intersection')+'</strong>.',
+                logRow:{type:'TEST', seg:'s'+(ai+1)+'∩s'+(bi+1), detail:hit?'Intersect':'No intersect'},
+                pseudoLine:8
+              });
+
+              if (hit) {
+                const ipt=intersectionPt(sa,sb);
+                if (ipt) {
+                  const dup=foundPts.some(p=>Math.abs(p.x-ipt.x)<1e-6&&Math.abs(p.y-ipt.y)<1e-6);
+                  if (!dup) { foundPts.push(ipt); }
+                  steps.push({
+                    sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[[ai,bi]],
+                    cpInfo:{detail:cpD, result:'Point ('+ipt.x.toFixed(2)+', '+ipt.y.toFixed(2)+')', ok:true},
+                    expl:'✓ Intersection reported at <strong>('+ipt.x.toFixed(2)+', '+ipt.y.toFixed(2)+')</strong>.',
+                    logRow:{type:'INTERSECT', seg:'s'+(ai+1)+'∩s'+(bi+1), detail:'('+ipt.x.toFixed(2)+','+ipt.y.toFixed(2)+')'},
+                    pseudoLine:8
+                  });
+                }
+              }
+            }
+
+          } else {
+            const pos=active.indexOf(ev.segIdx);
+            steps.push({
+              sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[], cpInfo:null,
+              expl:'<strong>RIGHT</strong> endpoint of s'+(ev.segIdx+1)+' at x='+ev.x.toFixed(2)+'. Removing from active set.',
+              logRow:{type:'RIGHT', seg:'s'+(ev.segIdx+1), detail:'Removed'},
+              pseudoLine:10
+            });
+
+            if (pos>0&&pos<active.length-1) {
+              const ai=active[pos-1], bi=active[pos+1];
+              const sa=segments[ai],sb=segments[bi];
+              const hit=segsIntersect(sa,sb);
+              const d1=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.p.x,sb.p.y);
+              const d2=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.q.x,sb.q.y);
+              const cpD = 'orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.p) = '+(d1>0?'CW':d1<0?'CCW':'Col')+'<br>orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.q) = '+(d2>0?'CW':d2<0?'CCW':'Col');
+
+              steps.push({
+                sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[[ai,bi]],
+                cpInfo:{detail:cpD, result:hit?'INTERSECT ✓':'No intersection', ok:hit},
+                expl:'New neighbors after removal: s'+(ai+1)+' and s'+(bi+1)+'. <strong>'+(hit?'INTERSECT':'No intersection')+'</strong>.',
+                logRow:{type:'TEST', seg:'s'+(ai+1)+'∩s'+(bi+1), detail:hit?'Intersect':'No intersect'},
+                pseudoLine:10
+              });
+
+              if (hit) {
+                const ipt=intersectionPt(sa,sb);
+                if (ipt) {
+                  const dup=foundPts.some(p=>Math.abs(p.x-ipt.x)<1e-6&&Math.abs(p.y-ipt.y)<1e-6);
+                  if (!dup) foundPts.push(ipt);
+                }
+              }
+            }
+            if (pos!==-1) active.splice(pos,1);
+          }
+        }
+
+        steps.push({
+          sweepX:null, activeIds:new Set(), ints:[...foundPts], hlPairs:[], cpInfo:null,
+          expl:'Sweep complete. Found <strong>'+foundPts.length+' intersection(s)</strong> among '+segments.length+' segments.',
+          logRow:{type:'DONE', seg:'—', detail:foundPts.length+' intersection(s)'},
+          pseudoLine:-1
+        });
+      }
+
+      // ── apply step ──
+      function applyStep(idx) {
+        if (idx<0||idx>=steps.length) return;
+        const s=steps[idx];
+        sweepX=s.sweepX; foundInts=s.ints||[]; activeIds=s.activeIds||new Set();
+        hlPairs=s.hlPairs||[]; cpInfo=s.cpInfo;
+
+        // explanation
+        document.getElementById('p4-explanationBox').innerHTML = s.expl||'';
+
+        // pseudocode
+        document.querySelectorAll('[id^="p4-pline-"]').forEach(el=>el.classList.remove('active'));
+        if (s.pseudoLine>0) {
+          const el=document.getElementById('p4-pline-'+s.pseudoLine);
+          if (el) el.classList.add('active');
+        }
+
+        // status
+        const badge=document.getElementById('p4-statusBadge');
+        const txt=document.getElementById('p4-statusText');
+        if (s.expl&&s.expl.includes('complete')) {
+          badge.className='status-badge done'; txt.textContent='Done';
+        } else if (s.sweepX!==null) {
+          badge.className='status-badge playing'; txt.textContent='Sweeping';
+        } else {
+          badge.className='status-badge ready'; txt.textContent='Ready';
+        }
+
+        // stats
+        document.getElementById('p4-statN').textContent    = segments.length;
+        document.getElementById('p4-statInts').textContent = foundInts.length;
+        const n=segments.length;
+        document.getElementById('p4-statBrute').textContent = n>0?'C('+n+',2)='+(n*(n-1)/2):'—';
+
+        // step counter
+        document.getElementById('p4-stepCounter').textContent = (idx+1)+' / '+steps.length;
+
+        // history
+        if (s.logRow) addHistoryRow(idx, s.logRow);
+
+        // cross-product overlay
+        const cpOv=document.getElementById('p4-cpOverlay');
+        if (cpInfo) {
+          document.getElementById('p4-cpDetail').innerHTML=cpInfo.detail;
+          const res=document.getElementById('p4-cpResult');
+          res.textContent=cpInfo.result;
+          res.style.color=cpInfo.ok?'#FFD600':'#ef9a9a';
+          cpOv.classList.add('visible');
+        } else {
+          cpOv.classList.remove('visible');
+        }
+
+        redraw();
+      }
+
+      let historyLog = [];
+      function addHistoryRow(stepNum, row) {
+        historyLog.push({stepNum, ...row});
+        if (historyLog.length > 60) historyLog.shift();
+        const tbody=document.getElementById('p4-historyBody');
+        tbody.innerHTML='';
+        historyLog.forEach((r,i)=>{
+          const tr=document.createElement('tr');
+          if (i===historyLog.length-1) tr.className='current';
+          tr.innerHTML=`<td>${r.stepNum+1}</td><td>${r.type}</td><td>${r.seg}</td><td>${r.detail}</td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.parentElement.scrollTop=tbody.parentElement.scrollHeight;
+      }
+
+      // ── load segments ──
+      function loadSegs(rawArr) {
+        segments = rawArr.map((s,i)=>({
+          p:{x:s[0],y:s[1]}, q:{x:s[2],y:s[3]},
+          id:i, color:PALETTE[i%PALETTE.length]
+        }));
+        resetState();
+        renderSegList();
+      }
+
+      function renderSegList() {
+        const el=document.getElementById('p4-segmentList');
+        el.innerHTML = segments.map((s,i)=>
+          `s${i+1}: (${s.p.x.toFixed(2)}, ${s.p.y.toFixed(2)}) → (${s.q.x.toFixed(2)}, ${s.q.y.toFixed(2)})<br>`
+        ).join('');
+      }
+
+      function resetState() {
+        stopPlay();
+        stepIdx=-1; sweepX=null; foundInts=[]; activeIds=new Set(); hlPairs=[]; cpInfo=null;
+        historyLog=[];
+        document.getElementById('p4-historyBody').innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text-muted);font-family:var(--font-ui);">No steps yet</td></tr>';
+        document.getElementById('p4-cpOverlay').classList.remove('visible');
+        document.getElementById('p4-explanationBox').innerHTML='Enter segments and press <strong>Build</strong> to start.';
+        document.getElementById('p4-statusBadge').className='status-badge';
+        document.getElementById('p4-statusText').textContent='Idle';
+        document.getElementById('p4-stepCounter').textContent='— / —';
+        document.getElementById('p4-statN').textContent=segments.length;
+        document.getElementById('p4-statInts').textContent='—';
+        const n=segments.length;
+        document.getElementById('p4-statBrute').textContent=n>0?'C('+n+',2)='+(n*(n-1)/2):'—';
+
+        setButtons(false);
+        redraw();
+      }
+
+      // ── button state ──
+      function setButtons(built) {
+        document.getElementById('p4-btnBack').disabled  = !built;
+        document.getElementById('p4-btnStep').disabled  = !built;
+        document.getElementById('p4-btnPlay').disabled  = !built;
+        document.getElementById('p4-btnPause').disabled = true;
+        document.getElementById('p4-btnReset').disabled = !built;
+      }
+
+      // ── playback ──
+      function stopPlay() {
+        if (playTimer) { clearTimeout(playTimer); playTimer=null; }
+        document.getElementById('p4-btnPause').disabled=true;
+        document.getElementById('p4-btnPlay').disabled=steps.length===0;
+      }
+
+      function advance() {
+        stepIdx++;
+        if (stepIdx>=steps.length) { stopPlay(); return; }
+        applyStep(stepIdx);
+        const delay=Math.round(1000/speed);
+        playTimer=setTimeout(advance,delay);
+      }
+
+      // ── canvas mouse ──
+      canvas.addEventListener('mousemove',e=>{
+        const r=canvas.getBoundingClientRect();
+        mousePos=fromC(e.clientX-r.left, e.clientY-r.top);
+        if (drawMode&&drawFirst) redraw();
+      });
+      canvas.addEventListener('mouseleave',()=>{ mousePos=null; });
+      canvas.addEventListener('click',e=>{
+        if (!drawMode) return;
+        const r=canvas.getBoundingClientRect();
+        const pt=fromC(e.clientX-r.left, e.clientY-r.top);
+        pt.x=Math.max(0.02,Math.min(0.98,pt.x));
+        pt.y=Math.max(0.02,Math.min(0.98,pt.y));
+        if (!drawFirst) {
+          drawFirst=pt;
+        } else {
+          if (Math.abs(drawFirst.x-pt.x)<0.01) pt.x+=0.01;
+          const idx=segments.length;
+          segments.push({p:drawFirst,q:pt,id:idx,color:PALETTE[idx%PALETTE.length]});
+          drawFirst=null;
+          resetState();
+          renderSegList();
+        }
+      });
+
+      // ── public ──
+      function build() {
+        buildSteps();
+        if (steps.length===0) return;
+        stepIdx=0;
+        document.getElementById('p4-vizIdleHint').style.display='none';
+        canvas.style.display='block';
+        resize(); // must size the buffer after canvas becomes visible
+        applyStep(0);
+        setButtons(true);
+        makePillController('p4-vizHero','p4-controlsPill');
+        document.getElementById('p4-controlsPill').classList.add('pinned');
+      }
+
+      return {
+        build,
+        back()    { stopPlay(); if(stepIdx>0){stepIdx--;applyStep(stepIdx);} },
+        step()    { stopPlay(); if(stepIdx<steps.length-1){stepIdx++;applyStep(stepIdx);} },
+        play()    {
+          if(playTimer) return;
+          if(stepIdx>=steps.length-1) stepIdx=-1;
+          document.getElementById('p4-btnPause').disabled=false;
+          document.getElementById('p4-btnPlay').disabled=true;
+          advance();
+        },
+        pause()   { stopPlay(); },
+        reset()   { resetState(); build(); },
+        redraw,
+        setSpeed(v) { speed = v; },
+        loadPreset(name) {
+          const data=PRESETS[name];
+          if (!data) return;
+          loadSegs(data);
+        },
+        toggleDrawMode() {
+          drawMode=!drawMode; drawFirst=null;
+          const btn=document.getElementById('p4-drawModeBtn');
+          const tip=document.getElementById('p4-drawTip');
+          if (drawMode) { btn.textContent='✓ Stop Drawing'; tip.style.display='block'; }
+          else          { btn.textContent='✎ Draw Segments'; tip.style.display='none'; }
+        },
+        clearSegments() {
+          segments=[]; drawFirst=null;
+          resetState();
+          renderSegList();
+          document.getElementById('p4-vizIdleHint').style.display='';
+          canvas.style.display='none';
+        },
+        init() {
+          resize();
+          loadSegs(PRESETS.simple);
+        }
+      };
+    })();
+
+    // ── wire buttons ──
+    document.getElementById('p4-btnBuild').addEventListener('click', Part4.build);
+    document.getElementById('p4-btnBack').addEventListener('click',  Part4.back);
+    document.getElementById('p4-btnStep').addEventListener('click',  Part4.step);
+    document.getElementById('p4-btnPlay').addEventListener('click',  Part4.play);
+    document.getElementById('p4-btnPause').addEventListener('click', Part4.pause);
+    document.getElementById('p4-btnReset').addEventListener('click', Part4.reset);
+    document.getElementById('p4-speedSlider').addEventListener('input', function() {
+      const v=parseFloat(this.value);
+      document.getElementById('p4-speedValue').textContent=v+'×';
+      Part4.setSpeed(v);
+    });
+
+    // ═══════════════════════════════════════════════
+    // BOOT
+    // ═══════════════════════════════════════════════
+    ThemeController.init();
+    Part4.init();
+
+  </script>
+</body>
+</html>

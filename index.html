@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BSD 404 · Algorithms II — Finals</title>
+  <style>
+
+    :root {
+      --font-ui:   -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      --text-xs:   0.70rem;
+      --text-sm:   0.813rem;
+      --text-base: 0.9375rem;
+      --text-lg:   1.0625rem;
+      --text-xl:   1.25rem;
+      --text-2xl:  1.625rem;
+      --text-3xl:  2.25rem;
+      --sp-xs: 4px; --sp-sm: 8px; --sp-md: 16px; --sp-lg: 24px; --sp-xl: 48px;
+      --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px; --radius-pill: 999px;
+      --ease: cubic-bezier(0.25,0.1,0.25,1);
+      --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
+      --dur-fast: 150ms; --dur-normal: 300ms; --dur-slow: 500ms;
+    }
+
+    [data-theme="dark"] {
+      --bg-base:     #0A0A0A;
+      --bg-surface:  #141414;
+      --bg-elevated: #1C1C1E;
+      --bg-hover:    #242426;
+      --border:       rgba(255,255,255,0.07);
+      --text-primary:   #F2F2F7;
+      --text-secondary: #8E8E93;
+      --text-muted:     #48484A;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.7);
+      --glass-bg:     rgba(14,14,14,0.75);
+      --glass-border: rgba(255,255,255,0.09);
+    }
+
+    [data-theme="light"] {
+      --bg-base:     #F2F2F7;
+      --bg-surface:  #FFFFFF;
+      --bg-elevated: #E8E8ED;
+      --bg-hover:    #E0E0E5;
+      --border:       rgba(0,0,0,0.10);
+      --text-primary:   #1C1C1E;
+      --text-secondary: #48484A;
+      --text-muted:     #8E8E93;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.12);
+      --glass-bg:     rgba(242,242,247,0.88);
+      --glass-border: rgba(0,0,0,0.10);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      transition: background var(--dur-normal) var(--ease), color var(--dur-normal) var(--ease);
+    }
+
+    /* ── Nav Rail ── */
+    .nav-rail {
+      position: fixed; top: 0; left: 0;
+      height: 100vh; width: 48px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-right: 1px solid var(--glass-border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: var(--sp-lg) 0; z-index: 200; overflow: hidden;
+      transition: width var(--dur-normal) var(--ease);
+    }
+    .nav-rail:hover { width: 224px; }
+
+    .nav-logo-row {
+      display: flex; align-items: center;
+      width: 100%; padding: 0 10px;
+      gap: var(--sp-sm); flex-shrink: 0;
+    }
+    .nav-logo {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      background: none; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; overflow: hidden;
+    }
+    .nav-logo-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+      color: var(--text-primary); white-space: nowrap;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-logo-label { opacity: 1; }
+
+    .nav-sep {
+      width: calc(100% - 20px); height: 1px;
+      background: var(--border); margin: 14px 0; flex-shrink: 0;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-sep { opacity: 1; }
+
+    .nav-item {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md); cursor: pointer;
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+      color: var(--text-secondary); position: relative;
+      text-decoration: none;
+    }
+    .nav-item:hover  { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { color: var(--text-primary); }
+
+    .nav-icon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .nav-label {
+      font-size: var(--text-sm); font-weight: 500;
+      white-space: nowrap; opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-label { opacity: 1; }
+    .nav-spacer { flex: 1; }
+
+    .nav-theme-btn {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md);
+      cursor: pointer; background: none; border: none;
+      color: var(--text-secondary); font-family: var(--font-ui);
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+    }
+    .nav-theme-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    [data-theme="light"] .nav-rail { background: var(--bg-surface); border-right: 1px solid var(--border); }
+
+    /* ── Hero ── */
+    .hero {
+      margin-left: 48px;
+      padding: 72px var(--sp-lg) var(--sp-xl);
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; gap: var(--sp-md);
+    }
+    .hero__eyebrow {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .hero__title {
+      font-size: var(--text-3xl); font-weight: 700;
+      letter-spacing: -0.8px; line-height: 1.15;
+      color: var(--text-primary);
+    }
+    .hero__subtitle { font-size: var(--text-base); color: var(--text-secondary); max-width: 480px; line-height: 1.6; }
+
+    /* ── Grid ── */
+    .clo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--sp-lg);
+      padding: 0 var(--sp-lg) var(--sp-xl);
+      max-width: 1100px; margin: 0 auto;
+      margin-left: calc(48px + var(--sp-lg));
+    }
+
+    .clo-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-card);
+      padding: var(--sp-lg);
+      display: flex; flex-direction: column; gap: var(--sp-sm);
+      text-decoration: none; color: inherit;
+      transition: transform var(--dur-normal) var(--ease-spring),
+                  box-shadow var(--dur-normal) var(--ease),
+                  border-color var(--dur-normal) var(--ease);
+      position: relative; overflow: hidden;
+    }
+    .clo-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: var(--card-accent-dim);
+      opacity: 0; transition: opacity var(--dur-normal) var(--ease);
+      pointer-events: none;
+    }
+    .clo-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-elevated); border-color: var(--card-accent); }
+    .clo-card:hover::before { opacity: 1; }
+
+    .clo-card__badge {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.6px;
+      text-transform: uppercase; color: var(--card-accent);
+      background: var(--card-accent-dim); padding: 3px 9px;
+      border-radius: var(--radius-pill); width: fit-content;
+    }
+    .clo-card__title {
+      font-size: var(--text-lg); font-weight: 700;
+      color: var(--text-primary); line-height: 1.2;
+    }
+    .clo-card__sub { font-size: var(--text-xs); color: var(--text-secondary); }
+    .clo-card__desc {
+      font-size: var(--text-sm); color: var(--text-secondary);
+      line-height: 1.6; flex: 1;
+      margin-top: var(--sp-xs);
+    }
+    .clo-card__footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: var(--sp-sm); padding-top: var(--sp-sm);
+      border-top: 1px solid var(--border);
+    }
+    .clo-card__tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .clo-card__tag {
+      font-size: 10px; font-weight: 500; padding: 2px 7px;
+      border-radius: var(--radius-pill); background: var(--bg-elevated);
+      color: var(--text-muted); border: 1px solid var(--border);
+    }
+    .clo-card__cta {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--card-accent); white-space: nowrap;
+    }
+
+    /* Card accent overrides */
+    .card-clo2 { --card-accent: #E8440A; --card-accent-dim: rgba(232,68,10,0.08); }
+    .card-clo3 { --card-accent: #C2185B; --card-accent-dim: rgba(194,24,91,0.08); }
+    .card-clo4 { --card-accent: #0288D1; --card-accent-dim: rgba(2,136,209,0.08); }
+    .card-clo5 { --card-accent: #7B1FA2; --card-accent-dim: rgba(123,31,162,0.08); }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center; padding: var(--sp-xl) var(--sp-lg);
+      font-size: var(--text-xs); color: var(--text-muted);
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 999px; }
+
+  </style>
+</head>
+<body>
+
+  <!-- NAV RAIL -->
+  <nav class="nav-rail">
+    <div class="nav-logo-row">
+      <div class="nav-logo">
+        <img src="maple-logo.jpg" alt="CUD"
+             style="width:36px;height:36px;object-fit:contain;display:block;" />
+      </div>
+      <span class="nav-logo-label">Canadian University Dubai</span>
+    </div>
+    <div class="nav-sep"></div>
+    <a href="index.html"                             class="nav-item active"><div class="nav-icon">▦</div><span class="nav-label">Home</span></a>
+    <a href="clo2_parallel_merge_sort.html"          class="nav-item"><div class="nav-icon">⇅</div><span class="nav-label">Parallel Sort</span></a>
+    <a href="clo3_extended_euclidean.html"           class="nav-item"><div class="nav-icon">∑</div><span class="nav-label">Extended GCD</span></a>
+    <a href="clo4_line_segment_intersection.html"    class="nav-item"><div class="nav-icon">⟋</div><span class="nav-label">Sweep Line</span></a>
+    <a href="clo5_greedy_set_cover.html"             class="nav-item"><div class="nav-icon">⊆</div><span class="nav-label">Set Cover</span></a>
+    <div class="nav-spacer"></div>
+    <button class="nav-theme-btn" id="themeToggle">
+      <div class="nav-icon" id="themeIcon">🌙</div>
+      <span class="nav-label" id="themeLabel">Light Mode</span>
+    </button>
+  </nav>
+
+  <div class="hero">
+    <div class="hero__eyebrow">BSD 404 · Spring 2026 · Dr. Arash Kermani</div>
+    <h1 class="hero__title">Algorithms II<br/>Final Project</h1>
+    <p class="hero__subtitle">Four interactive algorithm visualizations — one per CLO. Select any module to explore the algorithm step by step.</p>
+  </div>
+
+  <div class="clo-grid">
+
+    <a href="clo2_parallel_merge_sort.html" class="clo-card card-clo2">
+      <span class="clo-card__badge">CLO-2</span>
+      <div class="clo-card__title">Parallel Merge Sort</div>
+      <div class="clo-card__sub">Fork-Join · Work-Span · Brent's Theorem</div>
+      <div class="clo-card__desc">
+        Visualize how merge sort exploits parallelism through a fork-join model.
+        Explore Work W = O(n log n), Span D = O(log² n), and Brent's bound T_p ≤ W/p + D
+        with an adjustable processor slider.
+      </div>
+      <div class="clo-card__footer">
+        <div class="clo-card__tags">
+          <span class="clo-card__tag">Divide & Conquer</span>
+          <span class="clo-card__tag">Parallelism</span>
+          <span class="clo-card__tag">Gantt Chart</span>
+        </div>
+        <span class="clo-card__cta">Launch →</span>
+      </div>
+    </a>
+
+    <a href="clo3_extended_euclidean.html" class="clo-card card-clo3">
+      <span class="clo-card__badge">CLO-3</span>
+      <div class="clo-card__title">Extended Euclidean</div>
+      <div class="clo-card__sub">GCD · Bézout Identity · Modular Inverse</div>
+      <div class="clo-card__desc">
+        Step through the extended Euclidean algorithm with animated back-substitution.
+        Compute Bézout coefficients, find modular inverses, and explore RSA key
+        generation via Lamé's theorem.
+      </div>
+      <div class="clo-card__footer">
+        <div class="clo-card__tags">
+          <span class="clo-card__tag">Number Theory</span>
+          <span class="clo-card__tag">Cryptography</span>
+          <span class="clo-card__tag">RSA</span>
+        </div>
+        <span class="clo-card__cta">Launch →</span>
+      </div>
+    </a>
+
+    <a href="clo4_line_segment_intersection.html" class="clo-card card-clo4">
+      <span class="clo-card__badge">CLO-4</span>
+      <div class="clo-card__title">Line Segment Intersection</div>
+      <div class="clo-card__sub">Sweep Line · Bentley-Ottmann · Cross-Product</div>
+      <div class="clo-card__desc">
+        Watch a vertical sweep line process left/right endpoint events and detect
+        intersections using cross-product orientation tests. Draw custom segments
+        or choose from built-in presets.
+      </div>
+      <div class="clo-card__footer">
+        <div class="clo-card__tags">
+          <span class="clo-card__tag">Computational Geometry</span>
+          <span class="clo-card__tag">Sweep Line</span>
+        </div>
+        <span class="clo-card__cta">Launch →</span>
+      </div>
+    </a>
+
+    <a href="clo5_greedy_set_cover.html" class="clo-card card-clo5">
+      <span class="clo-card__badge">CLO-5</span>
+      <div class="clo-card__title">Greedy Set Cover</div>
+      <div class="clo-card__sub">Greedy Approximation · H(k)-Ratio · NP-Hard</div>
+      <div class="clo-card__desc">
+        Observe the greedy algorithm iteratively pick the set covering the most
+        uncovered elements. Track the live H(k) · OPT approximation bound and
+        compare greedy output against the optimal lower bound.
+      </div>
+      <div class="clo-card__footer">
+        <div class="clo-card__tags">
+          <span class="clo-card__tag">Approximation</span>
+          <span class="clo-card__tag">NP-Hard</span>
+          <span class="clo-card__tag">Greedy</span>
+        </div>
+        <span class="clo-card__cta">Launch →</span>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="footer">
+    BSD 404 · Algorithms II · Spring 2026 · Canadian University Dubai
+  </div>
+
+  <script>
+    const KEY = 'cud-theme';
+    function applyTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      document.getElementById('themeIcon').textContent  = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Light Mode' : 'Dark Mode';
+      try { localStorage.setItem(KEY, t); } catch(_) {}
+    }
+    let saved = 'dark';
+    try { saved = localStorage.getItem(KEY) || 'dark'; } catch(_) {}
+    applyTheme(saved);
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+  </script>
+</body>
+</html>

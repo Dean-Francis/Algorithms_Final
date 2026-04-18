@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CLO-3 — Extended Euclidean &amp; Modular Inverse</title>
+  <style>
+
+    :root {
+      --accent:          #C2185B;
+      --accent-dim:      rgba(194,24,91,0.20);
+      --accent-glow:     rgba(194,24,91,0.35);
+      --font-ui:   -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      --text-xs:   0.70rem; --text-sm:   0.813rem; --text-base: 0.9375rem;
+      --text-lg:   1.0625rem; --text-xl:   1.25rem; --text-2xl:  1.625rem;
+      --sp-xs:  4px; --sp-sm:  8px; --sp-md:  16px; --sp-lg:  24px; --sp-xl:  48px;
+      --radius-sm:   6px; --radius-md:   10px; --radius-lg:   14px; --radius-pill: 999px;
+      --ease:        cubic-bezier(0.25, 0.1, 0.25, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --dur-fast:    150ms; --dur-normal:  300ms; --dur-slow:    500ms;
+    }
+
+    [data-theme="dark"] {
+      --bg-base:     #0A0A0A; --bg-surface:  #141414;
+      --bg-elevated: #1C1C1E; --bg-hover:    #242426;
+      --border:       rgba(255,255,255,0.07); --border-focus: var(--accent);
+      --text-primary:   #F2F2F7; --text-secondary: #8E8E93; --text-muted:     #48484A;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.7);
+      --glass-bg:     rgba(14,14,14,0.75); --glass-border: rgba(255,255,255,0.09);
+    }
+
+    [data-theme="light"] {
+      --bg-base:     #F2F2F7; --bg-surface:  #FFFFFF;
+      --bg-elevated: #E8E8ED; --bg-hover:    #E0E0E5;
+      --border:       rgba(0,0,0,0.10); --border-focus: var(--accent);
+      --text-primary:   #1C1C1E; --text-secondary: #48484A; --text-muted:     #8E8E93;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.12);
+      --glass-bg:     rgba(242,242,247,0.88); --glass-border: rgba(0,0,0,0.10);
+    }
+
+    [data-theme="light"] .p3-ov__eq-md { color: var(--text-primary); }
+    [data-theme="light"] .p3-step-card { background: var(--bg-surface); border-color: var(--border); }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-ui); background: var(--bg-base); color: var(--text-primary);
+      transition: background var(--dur-normal) var(--ease), color var(--dur-normal) var(--ease);
+      overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       NAV RAIL
+    ═══════════════════════════════════════════════════ */
+    .nav-rail {
+      position: fixed; top: 0; left: 0;
+      height: 100vh; width: 48px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-right: 1px solid var(--glass-border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: var(--sp-lg) 0; z-index: 200; overflow: hidden;
+      transition: width var(--dur-normal) var(--ease);
+    }
+    .nav-rail:hover { width: 224px; }
+
+    .nav-logo-row {
+      display: flex; align-items: center;
+      width: 100%; padding: 0 10px;
+      gap: var(--sp-sm); flex-shrink: 0;
+    }
+    .nav-logo {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      background: none; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; overflow: hidden;
+    }
+    .nav-logo-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+      color: var(--text-primary); white-space: nowrap;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-logo-label { opacity: 1; }
+
+    .nav-sep {
+      width: calc(100% - 20px); height: 1px;
+      background: var(--border); margin: 14px 0; flex-shrink: 0;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-sep { opacity: 1; }
+
+    .nav-item {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md); cursor: pointer;
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+      color: var(--text-secondary); position: relative;
+      text-decoration: none;
+    }
+    .nav-item:hover  { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+    .nav-item.active::before {
+      content: ''; position: absolute; left: 0; top: 50%;
+      transform: translateY(-50%);
+      width: 3px; height: 18px;
+      background: var(--accent); border-radius: var(--radius-pill);
+    }
+
+    .nav-icon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .nav-label {
+      font-size: var(--text-sm); font-weight: 500;
+      white-space: nowrap; opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-label { opacity: 1; }
+    .nav-spacer { flex: 1; }
+
+    .nav-theme-btn {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md);
+      cursor: pointer; background: none; border: none;
+      color: var(--text-secondary); font-family: var(--font-ui);
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+    }
+    .nav-theme-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    [data-theme="light"] .nav-rail { background: var(--bg-surface); border-right: 1px solid var(--border); }
+
+    /* VIZ HERO */
+    .viz-hero {
+      margin-left: 48px; height: 100vh;
+      position: relative; display: flex; flex-direction: column;
+      background: var(--bg-base); overflow: hidden;
+    }
+    .viz-hero__title-block {
+      position: absolute; top: var(--sp-lg); left: var(--sp-lg);
+      z-index: 10; display: flex; flex-direction: column; gap: 5px; pointer-events: none;
+    }
+    .viz-hero__badge {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
+      color: var(--accent); background: var(--accent-dim); padding: 3px 9px;
+      border-radius: var(--radius-pill); width: fit-content;
+    }
+    .viz-hero__title {
+      font-size: var(--text-2xl); font-weight: 700;
+      letter-spacing: -0.5px; color: var(--text-primary); line-height: 1.2;
+    }
+    .viz-hero__subtitle { font-size: var(--text-sm); color: var(--text-secondary); }
+    .viz-hero__status { position: absolute; top: var(--sp-lg); right: var(--sp-lg); z-index: 10; }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+      padding: 5px 12px; border-radius: var(--radius-pill);
+      background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border); color: var(--text-muted);
+      transition: color var(--dur-normal) var(--ease);
+    }
+    .status-badge.ready { color: #90CAF9; } .status-badge.playing { color: #4CAF50; }
+    .status-badge.paused { color: #FFC107; } .status-badge.done { color: var(--accent); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status-badge.playing .status-dot { animation: pulse-dot 1.2s ease infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+    .viz-canvas {
+      flex: 1; width: 100%; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .viz-idle-hint {
+      display: flex; flex-direction: column; align-items: center;
+      gap: var(--sp-sm); color: var(--text-muted); pointer-events: none; user-select: none;
+    }
+    .viz-idle-hint__icon { font-size: 3.5rem; opacity: 0.15; }
+    .viz-idle-hint__text { font-size: var(--text-sm); font-weight: 500; }
+
+    /* Floating pill */
+    .viz-controls-pill {
+      position: absolute; bottom: var(--sp-xl); left: 50%; transform: translateX(-50%); z-index: 20;
+      display: flex; align-items: center; gap: var(--sp-sm); padding: 10px 20px;
+      background: var(--glass-bg); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      border: 1px solid var(--glass-border); border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-elevated); opacity: 0; transition: opacity var(--dur-normal) var(--ease);
+      white-space: nowrap;
+    }
+    .viz-hero:hover .viz-controls-pill,
+    .viz-controls-pill:focus-within,
+    .viz-controls-pill.pinned { opacity: 1; }
+    .pill-divider { width: 1px; height: 18px; background: var(--glass-border); flex-shrink: 0; }
+    .pill-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600;
+      border: none; border-radius: var(--radius-pill); cursor: pointer; padding: 6px 13px;
+      transition: background var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease),
+                  transform var(--dur-fast) var(--ease-spring);
+      background: transparent; color: var(--text-primary); letter-spacing: 0.2px;
+    }
+    .pill-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); }
+    [data-theme="light"] .pill-btn:hover:not(:disabled) { background: rgba(0,0,0,0.06); }
+    .pill-btn:active:not(:disabled) { transform: scale(0.93); }
+    .pill-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .pill-btn--primary { background: var(--accent); color: #fff; }
+    .pill-btn--primary:hover:not(:disabled) { filter: brightness(0.85); background: var(--accent); }
+    .pill-btn-icon { font-size: 12px; }
+    .pill-step-counter { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-secondary); min-width: 46px; text-align: center; }
+    .pill-speed-row { display: flex; align-items: center; gap: var(--sp-xs); }
+    .pill-speed-label { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--accent); min-width: 26px; text-align: right; }
+    .pill-slider { -webkit-appearance: none; appearance: none; width: 70px; height: 3px; background: var(--glass-border); border-radius: var(--radius-pill); outline: none; cursor: pointer; }
+    .pill-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; transition: transform var(--dur-fast) var(--ease-spring); }
+    .pill-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
+    .pill-legend { display: flex; align-items: center; gap: var(--sp-md); }
+    .pill-legend-item { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-secondary); }
+    .pill-legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    .scroll-hint {
+      position: absolute; bottom: var(--sp-lg); right: var(--sp-lg);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      color: var(--text-muted); font-size: var(--text-xs);
+      animation: bounce 2s ease infinite; pointer-events: none; user-select: none;
+    }
+    @keyframes bounce { 0%,100%{transform:translateY(0);opacity:0.4} 50%{transform:translateY(6px);opacity:0.9} }
+
+    /* BELOW FOLD */
+    .below-fold { display: flex; flex-direction: column; gap: var(--sp-md); padding: var(--sp-lg) var(--sp-lg) var(--sp-xl); margin-left: 48px; }
+    .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-md); }
+    .panel { background: var(--bg-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); border: 1px solid var(--border); overflow: hidden; }
+    .panel-header { padding: var(--sp-sm) var(--sp-md); border-bottom: 1px solid var(--border); }
+    .panel-title { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted); }
+    .panel-body { padding: var(--sp-md); }
+    .pseudocode-block { font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.9; background: var(--bg-elevated); border-radius: var(--radius-md); padding: var(--sp-sm) var(--sp-md); overflow-x: auto; }
+    .code-line { display: flex; gap: var(--sp-md); padding: 1px var(--sp-xs); border-radius: var(--radius-sm); cursor: default; transition: background var(--dur-fast) var(--ease); position: relative; }
+    .code-line:hover { background: var(--bg-hover); }
+    .code-line.active { background: var(--accent-dim); color: var(--accent); }
+    .code-line.active::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--accent); border-radius:var(--radius-pill); }
+    .line-num { color: var(--text-muted); min-width: 18px; text-align: right; user-select: none; flex-shrink: 0; }
+    .code-line[data-tip]:hover::after {
+      content: attr(data-tip); position: absolute; left: 100%; top: 50%;
+      transform: translateY(-50%); margin-left: var(--sp-sm);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: var(--sp-xs) var(--sp-sm);
+      font-size: var(--text-xs); color: var(--text-secondary);
+      white-space: nowrap; z-index: 50; box-shadow: var(--shadow-elevated);
+      font-family: var(--font-ui); pointer-events: none;
+    }
+    .explanation-box { background: var(--bg-elevated); border-radius: var(--radius-md); border-left: 3px solid var(--accent); padding: var(--sp-md); font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.75; min-height: 52px; }
+    .explanation-box strong { color: var(--text-primary); }
+    .explanation-box .mono { font-family: var(--font-mono); color: var(--accent); font-size: var(--text-xs); }
+    .collapsible { background: var(--bg-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); border: 1px solid var(--border); overflow: hidden; }
+    .collapsible-header { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-md) var(--sp-lg); cursor: pointer; user-select: none; transition: background var(--dur-fast) var(--ease); }
+    .collapsible-header:hover { background: var(--bg-hover); }
+    .collapsible-header-left { display: flex; align-items: center; gap: var(--sp-sm); }
+    .collapsible-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+    .collapsible-hint  { font-size: var(--text-xs); color: var(--text-muted); }
+    .collapsible-chevron { color: var(--text-muted); font-size: 11px; transition: transform var(--dur-normal) var(--ease); }
+    .collapsible.open .collapsible-chevron { transform: rotate(90deg); }
+    .collapsible-body { max-height: 0; overflow: hidden; transition: max-height var(--dur-slow) var(--ease); }
+    .collapsible.open .collapsible-body { max-height: 4000px; }
+    .collapsible-inner { padding: 0 var(--sp-lg) var(--sp-lg); border-top: 1px solid var(--border); }
+    .input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-md); margin-top: var(--sp-md); }
+    .input-group { display: flex; flex-direction: column; gap: var(--sp-xs); }
+    .input-label { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .input-field { font-family: var(--font-mono); font-size: var(--text-base); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 12px; color: var(--text-primary); outline: none; width: 100%; transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+    .input-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+    .presets-row { display: flex; gap: var(--sp-sm); flex-wrap: wrap; margin-top: var(--sp-md); align-items: center; }
+    .presets-label { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .preset-btn { font-size: var(--text-xs); font-weight: 500; padding: 5px 11px; border-radius: var(--radius-pill); background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; font-family: var(--font-ui); transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+    .preset-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-md); margin-top: var(--sp-md); }
+    .stat-card { background: var(--bg-elevated); border-radius: var(--radius-md); padding: var(--sp-md); display: flex; flex-direction: column; gap: 4px; }
+    .stat-value { font-size: var(--text-xl); font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); }
+    .stat-label { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; }
+    .history-wrapper { max-height: 220px; overflow-y: auto; border-radius: var(--radius-md); border: 1px solid var(--border); margin-top: var(--sp-md); }
+    .history-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--text-sm); }
+    .history-table th { text-align: left; padding: var(--sp-sm) var(--sp-md); font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); font-family: var(--font-ui); background: var(--bg-elevated); }
+    .history-table td { padding: var(--sp-sm) var(--sp-md); color: var(--text-secondary); border-bottom: 1px solid var(--border); cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+    .history-table tr:hover td   { background: var(--bg-hover); color: var(--text-primary); }
+    .history-table tr.current td { background: var(--accent-dim); color: var(--accent); }
+    .edu-content { margin-top: var(--sp-md); display: flex; flex-direction: column; gap: var(--sp-md); }
+    .edu-p { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.7; }
+    .key-concept { background: var(--accent-dim); border-left: 3px solid var(--accent); border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: var(--sp-md) var(--sp-lg); }
+    .key-concept-title { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px; }
+    .key-concept-body { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6; }
+    .key-concept-body .mono { font-family: var(--font-mono); color: var(--accent); font-size: var(--text-xs); }
+    ::-webkit-scrollbar { width: 4px; height: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: var(--radius-pill); }
+    @media (max-width: 768px) { .info-row { grid-template-columns: 1fr; } .input-grid { grid-template-columns: 1fr 1fr; } .stats-grid { grid-template-columns: 1fr 1fr; } }
+
+    /* ─── Part 3 — Whiteboard visualization ──────────── */
+    .p3-ov {
+      position: absolute; inset: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-base); opacity: 0; pointer-events: none;
+      transition: opacity 0.45s var(--ease);
+    }
+    .p3-ov.visible { opacity: 1; pointer-events: auto; }
+    .p3-ov__body {
+      text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;
+      animation: p3FadeUp 0.45s var(--ease-spring);
+    }
+    @keyframes p3FadeUp { from{opacity:0;transform:translateY(28px) scale(0.95)} to{opacity:1;transform:none} }
+    .p3-ov__label { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-muted); }
+    .p3-ov__eq-xl { font-family: var(--font-mono); font-size: clamp(2.2rem,5vw,4.5rem); font-weight: 600; color: var(--accent); line-height: 1.15; }
+    .p3-ov__eq-lg { font-family: var(--font-mono); font-size: clamp(1.5rem,3.5vw,2.8rem); color: var(--text-primary); line-height: 1.3; }
+    .p3-ov__eq-md { font-family: var(--font-mono); font-size: clamp(1rem,2.2vw,1.8rem); color: var(--text-secondary); line-height: 1.4; }
+    .p3-ov__gcd  { font-family: var(--font-mono); font-size: clamp(2rem,4vw,3.5rem); font-weight: 700; color: #4CAF50; line-height: 1; }
+    .p3-ov__inv  { font-family: var(--font-mono); font-size: clamp(0.9rem,2vw,1.5rem); color: #90CAF9; }
+    .p3-ov__sep  { width: 56px; height: 1px; background: var(--border); }
+
+    .p3-back-chain {
+      position: absolute; inset: 0; z-index: 3;
+      overflow-y: auto; overflow-x: hidden; padding: 130px 50px 140px;
+    }
+    .p3-bc-header {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase;
+      color: var(--text-muted); margin-top: 28px; margin-bottom: 16px;
+      padding-top: 20px; border-top: 1px solid var(--border);
+    }
+    @keyframes p3LineIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+    .p3-bc-line {
+      font-family: var(--font-mono); font-size: clamp(0.82rem,1.7vw,1.05rem);
+      line-height: 2.4; white-space: pre; position: relative; padding-left: 16px; color: var(--text-muted);
+    }
+    .p3-bc-line.seen { color: var(--text-secondary); opacity: 0.65; }
+    .p3-bc-line.cur  { color: var(--accent); animation: p3LineIn 220ms cubic-bezier(0.25,0,0,1) both; }
+    .p3-bc-line.cur::before {
+      content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      width: 3px; height: 60%; background: var(--accent); border-radius: var(--radius-pill);
+    }
+    .p3-continue-btn {
+      position: absolute; bottom: 18%; left: 50%; transform: translateX(-50%); z-index: 6;
+      padding: 10px 28px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius-pill); font-family: var(--font-ui);
+      font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.3px; cursor: pointer;
+      transition: opacity 0.2s var(--ease), transform 0.15s var(--ease); white-space: nowrap;
+    }
+    .p3-continue-btn:hover { opacity: 0.85; transform: translateX(-50%) scale(1.03); }
+
+  </style>
+</head>
+<body>
+
+  <!-- NAV RAIL -->
+  <nav class="nav-rail">
+    <div class="nav-logo-row">
+      <div class="nav-logo">
+        <img src="maple-logo.jpg" alt="CUD"
+             style="width:36px;height:36px;object-fit:contain;display:block;" />
+      </div>
+      <span class="nav-logo-label">Canadian University Dubai</span>
+    </div>
+    <div class="nav-sep"></div>
+    <a href="index.html"                             class="nav-item"><div class="nav-icon">▦</div><span class="nav-label">Home</span></a>
+    <a href="clo2_parallel_merge_sort.html"          class="nav-item"><div class="nav-icon">⇅</div><span class="nav-label">Parallel Sort</span></a>
+    <a href="clo3_extended_euclidean.html"           class="nav-item active"><div class="nav-icon">∑</div><span class="nav-label">Extended GCD</span></a>
+    <a href="clo4_line_segment_intersection.html"    class="nav-item"><div class="nav-icon">⟋</div><span class="nav-label">Sweep Line</span></a>
+    <a href="clo5_greedy_set_cover.html"             class="nav-item"><div class="nav-icon">⊆</div><span class="nav-label">Set Cover</span></a>
+    <div class="nav-spacer"></div>
+    <button class="nav-theme-btn" id="themeToggle">
+      <div class="nav-icon" id="themeIcon">🌙</div>
+      <span class="nav-label" id="themeLabel">Light Mode</span>
+    </button>
+  </nav>
+
+  <!-- VISUALIZATION HERO -->
+  <section class="viz-hero" id="p3-vizHero">
+    <div class="viz-hero__title-block">
+      <span class="viz-hero__badge">CLO-3</span>
+      <h1 class="viz-hero__title">Extended Euclidean</h1>
+      <span class="viz-hero__subtitle">Algorithm &amp; Modular Inverse</span>
+    </div>
+
+    <div class="viz-hero__status">
+      <div class="status-badge" id="p3-statusBadge">
+        <span class="status-dot"></span>
+        <span id="p3-statusText">Idle</span>
+      </div>
+    </div>
+
+    <div class="viz-canvas" id="p3-vizCanvas">
+      <div class="viz-idle-hint" id="p3-vizIdleHint">
+        <div class="viz-idle-hint__icon">∑</div>
+        <div class="viz-idle-hint__text">Press Build to begin</div>
+      </div>
+      <svg id="p3-vizSvg" xmlns="http://www.w3.org/2000/svg" style="display:none;"></svg>
+      <div id="p3-overlay" class="p3-ov" style="display:none;"></div>
+      <div id="p3-backChain" class="p3-back-chain" style="display:none;"></div>
+      <button id="p3-continueBtn" class="p3-continue-btn" style="display:none;"></button>
+    </div>
+
+    <!-- Floating pill controls -->
+    <div class="viz-controls-pill" id="p3-controlsPill">
+      <button class="pill-btn pill-btn--primary" id="p3-btnBuild">
+        <span class="pill-btn-icon">⚙</span> Build
+      </button>
+      <div class="pill-divider"></div>
+      <button class="pill-btn" id="p3-btnBack" disabled><span class="pill-btn-icon">←</span></button>
+      <button class="pill-btn" id="p3-btnStep" disabled><span class="pill-btn-icon">→</span> Step</button>
+      <button class="pill-btn" id="p3-btnPlay" disabled><span class="pill-btn-icon">▶</span> Play</button>
+      <button class="pill-btn" id="p3-btnPause" disabled><span class="pill-btn-icon">⏸</span></button>
+      <button class="pill-btn" id="p3-btnReset" disabled><span class="pill-btn-icon">↺</span></button>
+      <div class="pill-divider"></div>
+      <div class="pill-speed-row">
+        <input type="range" class="pill-slider" id="p3-speedSlider" min="0.25" max="4" step="0.25" value="1" />
+        <span class="pill-speed-label" id="p3-speedValue">1×</span>
+      </div>
+      <div class="pill-divider"></div>
+      <span class="pill-step-counter" id="p3-stepCounter">— / —</span>
+      <div class="pill-divider"></div>
+      <div class="pill-legend">
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:var(--accent);"></div>Active
+        </div>
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:var(--text-secondary);opacity:0.65;"></div>Completed
+        </div>
+      </div>
+    </div>
+
+    <div class="scroll-hint"><span>scroll</span><span>↓</span></div>
+  </section>
+
+  <div class="below-fold">
+
+    <div class="info-row">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Pseudocode</span></div>
+        <div class="panel-body">
+          <div class="pseudocode-block">
+            <div class="code-line" id="p3-pline-1" data-tip="Entry point — returns gcd, x, y">
+              <span class="line-num">1</span><span><b>function</b> extGCD(a, b)</span>
+            </div>
+            <div class="code-line" id="p3-pline-2" data-tip="Base case: gcd(a, 0) = a, Bézout: 1·a + 0·0 = a">
+              <span class="line-num">2</span><span>&nbsp;&nbsp;<b>if</b> b = 0 <b>then return</b> (a, 1, 0)</span>
+            </div>
+            <div class="code-line" id="p3-pline-3" data-tip="Integer quotient of a divided by b">
+              <span class="line-num">3</span><span>&nbsp;&nbsp;q ← ⌊a / b⌋</span>
+            </div>
+            <div class="code-line" id="p3-pline-4" data-tip="Remainder — next pair will be (b, r)">
+              <span class="line-num">4</span><span>&nbsp;&nbsp;r ← a mod b</span>
+            </div>
+            <div class="code-line" id="p3-pline-5" data-tip="Recursive call shrinks the problem each time">
+              <span class="line-num">5</span><span>&nbsp;&nbsp;(g, x₁, y₁) ← extGCD(b, r)</span>
+            </div>
+            <div class="code-line" id="p3-pline-6" data-tip="Back-substitute x using previous y coefficient">
+              <span class="line-num">6</span><span>&nbsp;&nbsp;x ← y₁</span>
+            </div>
+            <div class="code-line" id="p3-pline-7" data-tip="Back-substitute y using quotient and x₁">
+              <span class="line-num">7</span><span>&nbsp;&nbsp;y ← x₁ − q · y₁</span>
+            </div>
+            <div class="code-line" id="p3-pline-8" data-tip="Return gcd and Bézout coefficients x, y">
+              <span class="line-num">8</span><span>&nbsp;&nbsp;<b>return</b> (g, x, y)</span>
+            </div>
+            <div class="code-line" id="p3-pline-9" data-tip="Inverse only exists when gcd(a, n) = 1">
+              <span class="line-num">9</span><span><b>function</b> modInverse(a, n)</span>
+            </div>
+            <div class="code-line" id="p3-pline-10" data-tip="x mod n from Bézout's identity ax + ny = 1">
+              <span class="line-num">10</span><span>&nbsp;&nbsp;<b>return</b> x mod n</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Step Explanation</span></div>
+        <div class="panel-body">
+          <div class="explanation-box" id="p3-explanationBox">
+            Enter values in <strong>Input &amp; Presets</strong> below,
+            then press <strong>Build</strong> in the controls above to start.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input & Presets -->
+    <div class="collapsible open" id="p3-sectionInput">
+      <div class="collapsible-header" onclick="toggleSection('p3-sectionInput')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Input &amp; Presets</span>
+          <span class="collapsible-hint">Enter custom values or choose an example</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="input-grid">
+            <div class="input-group">
+              <label class="input-label" id="p3-labelA" for="p3-inputA">Value a</label>
+              <input class="input-field" type="number" id="p3-inputA" value="3" min="1" />
+            </div>
+            <div class="input-group">
+              <label class="input-label" id="p3-labelB" for="p3-inputB">Modulus n</label>
+              <input class="input-field" type="number" id="p3-inputB" value="26" min="2" />
+            </div>
+          </div>
+          <div class="presets-row">
+            <span class="presets-label">Presets</span>
+            <button class="preset-btn" onclick="loadPreset(35,64)">35, 64</button>
+            <button class="preset-btn" onclick="loadPreset(17,13)">17, 13</button>
+            <button class="preset-btn" onclick="loadPreset(252,198)">252, 198</button>
+            <button class="preset-btn" onclick="p3LoadAndPlay(144,89)"
+                    title="Fibonacci — worst case (Lamé's theorem)">⚠ Fibonacci</button>
+            <button class="preset-btn" onclick="p3LoadRSA(3,26)"
+                    title="RSA: find private key d = e⁻¹ mod φ(n)">RSA-style</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics & History -->
+    <div class="collapsible" id="p3-sectionStats">
+      <div class="collapsible-header" onclick="toggleSection('p3-sectionStats')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Statistics &amp; History</span>
+          <span class="collapsible-hint">Live counters and step log</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-value" id="p3-statDivisions">—</span>
+              <span class="stat-label">Divisions</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="p3-statGCD">—</span>
+              <span class="stat-label">GCD</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="p3-statInverse">—</span>
+              <span class="stat-label">Inverse mod n</span>
+            </div>
+          </div>
+          <div class="history-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr><th>#</th><th>a</th><th>b</th><th>q = ⌊a/b⌋</th><th>r = a mod b</th><th>x</th><th>y</th></tr>
+              </thead>
+              <tbody id="p3-historyBody">
+                <tr><td colspan="7" style="text-align:center;color:var(--text-muted);font-family:var(--font-ui);">No steps yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Educational Overview -->
+    <div class="collapsible" id="p3-sectionEdu">
+      <div class="collapsible-header" onclick="toggleSection('p3-sectionEdu')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Educational Overview</span>
+          <span class="collapsible-hint">Key concepts, algorithm explanation and worked example</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="edu-content">
+            <p class="edu-p">
+              The <strong>Euclidean Algorithm</strong> (≈300 BC) computes gcd(a, b)
+              by repeatedly replacing (a, b) with (b, a mod b) until the remainder
+              is zero. It runs in <strong>O(log min(a, b))</strong> divisions.
+            </p>
+            <div class="key-concept">
+              <div class="key-concept-title">Bézout's Identity</div>
+              <div class="key-concept-body">
+                For any integers a and b there exist x, y such that
+                <span class="mono">ax + by = gcd(a, b)</span>.
+                The extended algorithm finds x and y via back-substitution.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Modular Inverse</div>
+              <div class="key-concept-body">
+                If <span class="mono">gcd(a, n) = 1</span> then
+                <span class="mono">a⁻¹ mod n = x mod n</span>
+                where ax + ny = 1. This is the foundation of RSA and Diffie-Hellman.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Complexity &amp; Worst Case (Lamé's Theorem)</div>
+              <div class="key-concept-body">
+                <strong>Time:</strong> O(log min(a, b)) divisions — logarithmic in the smaller input.<br/>
+                <strong>Worst case:</strong> consecutive Fibonacci numbers — the number of divisions
+                never exceeds <span class="mono">5 × log₁₀(min(a, b))</span>.<br/>
+                <strong>Try it:</strong> the ⚠ Fibonacci preset uses a = 144, n = 89.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Worked Example — gcd(35, 15)</div>
+              <div class="key-concept-body">
+                35 = 2·15 + 5 &nbsp;→&nbsp; 15 = 3·5 + 0 &nbsp;→&nbsp; gcd = <strong>5</strong><br/>
+                Back-sub: 5 = 35 − 2·15 &nbsp;∴&nbsp; x = 1, y = −2<br/>
+                Verify: 35(1) + 15(−2) = 5 ✓
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">RSA Application</div>
+              <div class="key-concept-body">
+                RSA generates keys using: gcd(e, φ(n)) = 1 and d = e⁻¹ mod φ(n).<br/>
+                <strong>Example:</strong> e=3, φ(n)=26 → extGCD(3, 26) gives x=9 → d=9.<br/>
+                Check: 3 × 9 = 27 ≡ 1 (mod 26) ✓ — d=9 is the private decryption exponent.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+
+    const ThemeController = (() => {
+      const KEY = 'cud-theme';
+      function apply(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.getElementById('themeIcon').textContent  = theme === 'dark' ? '🌙' : '☀️';
+        document.getElementById('themeLabel').textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        try { localStorage.setItem(KEY, theme); } catch (_) {}
+      }
+      function init() {
+        let saved = 'dark';
+        try { saved = localStorage.getItem(KEY) || 'dark'; } catch (_) {}
+        apply(saved);
+        document.getElementById('themeToggle').addEventListener('click', () => {
+          apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+        });
+      }
+      return { init };
+    })();
+
+    function toggleSection(id) { document.getElementById(id).classList.toggle('open'); }
+
+    function loadPreset(a, b) {
+      document.getElementById('p3-inputA').value = a;
+      document.getElementById('p3-inputB').value = b;
+      if (window.p3ResetMode) window.p3ResetMode();
+    }
+
+    function makePillController(heroId, pillId) {
+      const hero = document.getElementById(heroId);
+      const pill = document.getElementById(pillId);
+      let timer = null;
+      function show() {
+        pill.style.opacity = '1';
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!pill.classList.contains('pinned')) pill.style.opacity = '';
+        }, 3000);
+      }
+      hero.addEventListener('mousemove', show);
+      pill.addEventListener('mouseenter', () => { clearTimeout(timer); pill.style.opacity = '1'; });
+      pill.addEventListener('mouseleave', show);
+    }
+
+    // ═══════════════════════════════════════════════
+    // PART 3 — EXTENDED EUCLIDEAN ALGORITHM
+    // ═══════════════════════════════════════════════
+
+    const Part3 = (() => {
+
+      const state = {
+        steps: [], currentStep: -1,
+        isPlaying: false, speed: 1,
+        status: 'idle', playTimer: null,
+      };
+      let ovHideTimer = null;
+      let rsaMode = false;
+
+      function setMode(isRsa) {
+        rsaMode = isRsa;
+        document.getElementById('p3-labelA').textContent = isRsa ? 'e  (public exponent)' : 'Value a';
+        document.getElementById('p3-labelB').textContent = isRsa ? 'φ(n)  (totient)'       : 'Modulus n';
+      }
+
+      function computeData(a, b) {
+        const forward = [];
+        let ca = a, cb = b;
+        while (cb !== 0) {
+          const q = Math.floor(ca / cb), r = ca % cb;
+          forward.push({ a: ca, b: cb, q, r });
+          ca = cb; cb = r;
+        }
+        const gcd = ca;
+        const backX = new Array(forward.length);
+        const backY = new Array(forward.length);
+        let x1 = 1, y1 = 0;
+        for (let i = forward.length - 1; i >= 0; i--) {
+          backX[i] = y1;
+          backY[i] = x1 - forward[i].q * y1;
+          x1 = backX[i]; y1 = backY[i];
+        }
+        const finalX = forward.length ? backX[0] : 1;
+        const finalY = forward.length ? backY[0] : 0;
+        return { forward, gcd, backX, backY, finalX, finalY };
+      }
+
+      function computeBackSubDisplay(forward, gcd, origA, origB) {
+        const n = forward.length;
+        if (n === 0) return { lines: [], stepRanges: [] };
+        const pfx = ' '.repeat(String(gcd).length + 2) + '= ';
+        function getVal(vid) {
+          if (vid === -1) return origA; if (vid === 0) return origB;
+          return forward[vid - 1].r;
+        }
+        function vidA(i) { return i === 0 ? -1 : i - 1; }
+        function vidB(i) { return i; }
+        if (n === 1) return { lines: [`${gcd} = ${origB}`], stepRanges: [{ start: 0, end: 0 }] };
+
+        const gcdIdx = n - 2;
+        const lines = [], stepRanges = [];
+        const coeff = new Map();
+        const addC = (vid, c) => coeff.set(vid, (coeff.get(vid) || 0) + c);
+        addC(vidA(gcdIdx), 1); addC(vidB(gcdIdx), -forward[gcdIdx].q);
+
+        function fmtEntries(ents) {
+          const pos = ents.filter(([,c]) => c > 0).sort(([a],[b]) => a - b);
+          const neg = ents.filter(([,c]) => c < 0).sort(([a],[b]) => a - b);
+          const parts = [];
+          for (const [vid, c] of [...pos, ...neg]) {
+            const absC = Math.abs(c);
+            const val  = getVal(vid);
+            const term = absC === 1 ? `${val}` : `${absC}·${val}`;
+            if (parts.length === 0) parts.push(c < 0 ? `−${term}` : term);
+            else parts.push(c < 0 ? ` − ${term}` : ` + ${term}`);
+          }
+          return parts.join('') || '0';
+        }
+        function fmtExpr() { return fmtEntries([...coeff.entries()].filter(([,c]) => c !== 0)); }
+
+        lines.push(`${gcd} = ${fmtExpr()}`);
+        stepRanges.push({ start: 0, end: 0 });
+
+        for (let k = gcdIdx - 1; k >= 0; k--) {
+          const vid = k + 1;
+          const c   = coeff.get(vid) || 0;
+          if (c === 0) continue;
+          const stepStart = lines.length;
+          const vaId = vidA(k), vbId = vidB(k), q = forward[k].q;
+          const ents = [...coeff.entries()].filter(([,cv]) => cv !== 0);
+          const posE = ents.filter(([,cv]) => cv > 0).sort(([a],[b]) => a - b);
+          const negE = ents.filter(([,cv]) => cv < 0).sort(([a],[b]) => a - b);
+          const expParts = [];
+          for (const [evid, cv] of [...posE, ...negE]) {
+            const absCV = Math.abs(cv);
+            let termStr;
+            if (evid === vid) {
+              const inner = q === 1 ? `${getVal(vaId)} − ${getVal(vbId)}` : `${getVal(vaId)} − ${q}·${getVal(vbId)}`;
+              termStr = absCV === 1 ? `(${inner})` : `${absCV}·(${inner})`;
+            } else {
+              const v = getVal(evid);
+              termStr = absCV === 1 ? `${v}` : `${absCV}·${v}`;
+            }
+            if (expParts.length === 0) expParts.push(cv < 0 ? `−${termStr}` : termStr);
+            else expParts.push(cv < 0 ? ` − ${termStr}` : ` + ${termStr}`);
+          }
+          lines.push(pfx + expParts.join(''));
+          coeff.delete(vid); addC(vaId, c); addC(vbId, -c * q);
+          lines.push(pfx + fmtExpr());
+          stepRanges.push({ start: stepStart, end: lines.length - 1 });
+        }
+        return { lines, stepRanges };
+      }
+
+      function buildSteps() {
+        const a = parseInt(document.getElementById('p3-inputA').value) || 3;
+        const b = parseInt(document.getElementById('p3-inputB').value) || 26;
+        if (a < 1 || b < 2) return;
+
+        const { forward, gcd, backX, backY, finalX, finalY } = computeData(a, b);
+        const inverse = gcd === 1 ? ((finalX % b + b) % b) : null;
+        const bsData  = computeBackSubDisplay(forward, gcd, a, b);
+        const dA = rsaMode ? 'e' : `${a}`;
+        const dB = rsaMode ? 'φ(n)' : `${b}`;
+
+        state.steps = [];
+
+        state.steps.push({
+          phase: 'intro', a, b, line: null,
+          explanation: rsaMode
+            ? `Computing <strong>gcd(e, φ(n)) = gcd(${a}, ${b})</strong> to find Bézout coefficients — needed to derive the <strong>private key d = e⁻¹ mod φ(n)</strong>.`
+            : `Computing <strong>gcd(${a}, ${b})</strong> and Bézout coefficients x, y such that ${a}·x + ${b}·y = gcd.`
+        });
+
+        forward.forEach((f, i) => {
+          const isPivot = f.r === 0;
+          state.steps.push({
+            phase: isPivot ? 'pivot' : 'forward',
+            a: f.a, b: f.b, q: f.q, r: f.r, gcd,
+            eq:   `${f.a} = ${f.q}·${f.b} + ${f.r}`,
+            line: i === 0 ? 1 : 5,
+            explanation: isPivot
+              ? `Remainder is <strong>0</strong> → gcd(${dA}, ${dB}) = <span class="mono">${gcd}</span>. Back-substitution will express gcd in terms of ${dA} and ${dB}.`
+              : `<strong>extGCD(${f.a}, ${f.b}):</strong> ${f.a} = ${f.q}·${f.b} + ${f.r}. Recurse with (${f.b}, ${f.r}).`
+          });
+        });
+
+        const gcdIdx2 = forward.length - 2;
+        bsData.stepRanges.forEach((range, i) => {
+          const isLast = i === bsData.stepRanges.length - 1;
+          const base   = { phase: 'backsub', a, b, gcd, currentRange: i,
+                           bsLines: bsData.lines, stepRanges: bsData.stepRanges };
+          if (i === 0) {
+            const fi = forward[gcdIdx2];
+            state.steps.push({ ...base, subStep: 'single', line: 6,
+              explanation: `We now work <strong>backwards</strong> to express gcd(${dA}, ${dB}) = ${gcd} as a linear combination <em>${dA}·x + ${dB}·y = ${gcd}</em>. From step ${gcdIdx2 + 1}: ${fi.a} = ${fi.q}·${fi.b} + ${gcd}, so we isolate <strong>${gcd} = ${fi.a} − ${fi.q}·${fi.b}</strong>.`
+            });
+          } else {
+            const k = gcdIdx2 - i;
+            const fk = forward[k];
+            const rem = fk.r;
+            const substRhs = fk.q === 0 ? `${fk.a}` : `${fk.a} − ${fk.q === 1 ? '' : fk.q + '·'}${fk.b}`;
+            state.steps.push({ ...base, subStep: 'expand', line: 6,
+              explanation: `<strong>Step ${k+1} told us</strong> ${fk.a} = ${fk.q}·${fk.b} + ${rem}, so <span class="mono">${rem} = ${substRhs}</span>. Substitute every occurrence of <span class="mono">${rem}</span> with <span class="mono">(${substRhs})</span>.`
+            });
+            state.steps.push({ ...base, subStep: 'simplify', line: isLast ? 8 : 7,
+              explanation: isLast
+                ? `<strong>Final substitution complete.</strong> Collect like terms — gcd(${dA}, ${dB}) = ${gcd} entirely in terms of ${dA} and ${dB}: <span class="mono">${dA}·(${finalX}) + ${dB}·(${finalY}) = ${gcd}</span>.` + (rsaMode ? ` x = ${finalX} will become the private key d.` : '')
+                : `Collect like terms — group all multiples of <span class="mono">${dA}</span> and <span class="mono">${dB}</span>.`
+            });
+          }
+        });
+
+        const complexitySuffix = `<br><span style="opacity:0.5;font-size:0.95em;">Completed in <strong>${forward.length} division${forward.length !== 1 ? 's' : ''}</strong> — O(log min(a, b)) complexity.</span>`;
+
+        state.steps.push({
+          phase: 'result', a, b, gcd, x: finalX, y: finalY, inverse, line: 8,
+          explanation: rsaMode
+            ? `<strong>Bézout's Identity:</strong> e·${finalX} + φ(n)·${finalY} = ${gcd}.` + (gcd === 1 ? ` Since gcd(e, φ(n)) = 1, the private key d exists. Press <strong>Continue</strong> to compute d = e⁻¹ mod φ(n).` : ` Since gcd ≠ 1, no private key exists.`) + complexitySuffix
+            : `<strong>Bézout's Identity:</strong> ${a}·${finalX} + ${b}·${finalY} = ${gcd}.` + (gcd === 1 ? ` Since gcd = 1, a modular inverse exists. Press <strong>Continue</strong> to compute ${a}⁻¹ mod ${b}.` : ` Since gcd ≠ 1, no modular inverse exists.`) + complexitySuffix
+        });
+
+        if (gcd === 1) {
+          const fmtX = finalX < 0 ? `(${finalX})` : `${finalX}`;
+          const fmtY = finalY < 0 ? `(${finalY})` : `${finalY}`;
+          const invLine = rsaMode
+            ? `d  =  e⁻¹ mod φ(n)  =  ${fmtX} mod ${b}  =  ${inverse}`
+            : `${a}⁻¹ mod ${b}  =  ${fmtX} mod ${b}  =  ${inverse}`;
+          state.steps.push({
+            phase: 'mod-inverse', a, b, x: finalX, y: finalY, inverse, line: 10,
+            invLine,
+            explanation: rsaMode
+              ? `<strong>Private Key d:</strong><br>From Bézout: <span class="mono">e·${fmtX} + φ(n)·${fmtY} = 1</span><br>Taking both sides mod φ(n): <span class="mono">e·${fmtX} ≡ 1 (mod φ(n))</span><br>Therefore <span class="mono">d = e⁻¹ mod φ(n) = ${fmtX} mod ${b} = <strong>${inverse}</strong></span>` + complexitySuffix
+              : `<strong>Modular Inverse:</strong><br>From Bézout: <span class="mono">${a}·${fmtX} + ${b}·${fmtY} = 1</span><br>Taking both sides mod ${b}: <span class="mono">${a}·${fmtX} ≡ 1 (mod ${b})</span><br>Therefore <span class="mono">${a}⁻¹ mod ${b} = ${fmtX} mod ${b} = <strong>${inverse}</strong></span>` + complexitySuffix
+          });
+        }
+
+        document.getElementById('p3-statDivisions').textContent = forward.length;
+        document.getElementById('p3-statGCD').textContent       = gcd;
+        document.getElementById('p3-statInverse').textContent   = inverse !== null ? inverse : 'N/A';
+
+        const tbody = document.getElementById('p3-historyBody');
+        tbody.innerHTML = '';
+        forward.forEach((f, i) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${i+1}</td><td>${f.a}</td><td>${f.b}</td><td>${f.q}</td><td>${f.r}</td><td>${backX[i]}</td><td>${backY[i]}</td>`;
+          tr.addEventListener('click', () => renderStep(i + 1));
+          tbody.appendChild(tr);
+        });
+        const baseRow = document.createElement('tr');
+        baseRow.innerHTML = `<td>${forward.length+1}</td><td>${gcd}</td><td>0</td><td>—</td><td>—</td><td>1</td><td>0</td>`;
+        baseRow.addEventListener('click', () => renderStep(forward.length));
+        tbody.appendChild(baseRow);
+
+        document.getElementById('p3-vizIdleHint').style.display = 'none';
+        document.getElementById('p3-btnStep').disabled  = false;
+        document.getElementById('p3-btnPlay').disabled  = false;
+        document.getElementById('p3-btnPause').disabled = true;
+        document.getElementById('p3-btnReset').disabled = false;
+
+        state.currentStep = 0;
+        updateStatus('ready');
+        renderStep(0);
+      }
+
+      function drawChain(stepIdx) {
+        const bc     = document.getElementById('p3-backChain');
+        bc.innerHTML = '';
+        const curStep = state.steps[stepIdx];
+        const inBS = curStep.phase === 'backsub';
+        const inMI = curStep.phase === 'mod-inverse';
+
+        const fwdHdr = document.createElement('div');
+        fwdHdr.className = 'p3-bc-header';
+        fwdHdr.style.cssText = 'border-top:none;margin-top:0;padding-top:0;';
+        fwdHdr.textContent = rsaMode ? 'Euclidean Algorithm  (e, φ(n))' : 'Euclidean Algorithm';
+        bc.appendChild(fwdHdr);
+
+        for (let i = 0; i < state.steps.length; i++) {
+          const s = state.steps[i];
+          if (s.phase !== 'forward' && s.phase !== 'pivot') continue;
+          if (!inBS && !inMI && i > stepIdx) break;
+          const isCur = !inBS && !inMI && i === stepIdx;
+          const div = document.createElement('div');
+          div.className = 'p3-bc-line' + (isCur ? ' cur' : ' seen');
+          div.textContent = s.eq;
+          bc.appendChild(div);
+        }
+
+        if (inBS || inMI) {
+          const srcA = curStep.a, srcB = curStep.b;
+          const srcGcd = inMI ? 1 : curStep.gcd;
+          const dispA = rsaMode ? 'e' : `${srcA}`;
+          const dispB = rsaMode ? 'φ(n)' : `${srcB}`;
+
+          const gcdHdr = document.createElement('div'); gcdHdr.className = 'p3-bc-header'; gcdHdr.textContent = 'GCD Result'; bc.appendChild(gcdHdr);
+          const gcdLine = document.createElement('div'); gcdLine.className = 'p3-bc-line seen';
+          gcdLine.textContent = rsaMode ? `gcd(e, φ(n))  =  gcd(${srcA}, ${srcB})  =  ${srcGcd}` : `gcd(${srcA}, ${srcB}) = ${srcGcd}`;
+          bc.appendChild(gcdLine);
+
+          const hdr = document.createElement('div'); hdr.className = 'p3-bc-header'; hdr.textContent = 'Back-Substitution'; bc.appendChild(hdr);
+
+          const bsStep = state.steps.find(s => s.phase === 'backsub');
+          if (bsStep) {
+            const { bsLines, stepRanges } = bsStep;
+            if (inMI) {
+              const lastEnd = stepRanges[stepRanges.length - 1].end;
+              bsLines.forEach((line, li) => {
+                if (li > lastEnd) return;
+                const div = document.createElement('div'); div.className = 'p3-bc-line seen'; div.textContent = line; bc.appendChild(div);
+              });
+            } else {
+              const { currentRange, subStep } = curStep;
+              const range = stepRanges[currentRange];
+              let maxLine, curStart, curEnd;
+              if (subStep === 'single' || subStep === 'expand') {
+                maxLine = curStart = curEnd = range.start;
+              } else {
+                maxLine = range.end; curStart = curEnd = range.end;
+              }
+              bsLines.forEach((line, li) => {
+                if (li > maxLine) return;
+                const div = document.createElement('div');
+                div.className = 'p3-bc-line' + (li >= curStart && li <= curEnd ? ' cur' : ' seen');
+                div.textContent = line; bc.appendChild(div);
+              });
+            }
+          }
+        }
+
+        if (inMI) {
+          const { a, b, x, y } = curStep;
+          const bezHdr = document.createElement('div'); bezHdr.className = 'p3-bc-header'; bezHdr.textContent = 'Bézout Identity'; bc.appendChild(bezHdr);
+          const fmtC = v => v < 0 ? `(${v})` : `${v}`;
+          const bezLines = rsaMode
+            ? [`e·${fmtC(x)} + φ(n)·${fmtC(y)} = 1`, `d = ${x}   →   private key  (keep)`, `y = ${y}   →   coefficient of φ(n)  (discard)`]
+            : [`${a}·${fmtC(x)} + ${b}·${fmtC(y)} = 1`, `x = ${x}   →   coefficient of ${a}`, `y = ${y}   →   coefficient of ${b}`];
+          bezLines.forEach(text => { const d = document.createElement('div'); d.className = 'p3-bc-line seen'; d.textContent = text; bc.appendChild(d); });
+
+          const hdr2 = document.createElement('div'); hdr2.className = 'p3-bc-header'; hdr2.textContent = rsaMode ? 'RSA Private Key' : 'Modular Inverse'; bc.appendChild(hdr2);
+          const div = document.createElement('div'); div.className = 'p3-bc-line cur'; div.textContent = curStep.invLine; bc.appendChild(div);
+        }
+
+        bc.scrollTop = bc.scrollHeight;
+      }
+
+      function showOv(html) {
+        clearTimeout(ovHideTimer);
+        const ov = document.getElementById('p3-overlay');
+        ov.innerHTML = `<div class="p3-ov__body">${html}</div>`;
+        ov.style.display = 'flex'; ov.offsetHeight; ov.classList.add('visible');
+      }
+      function hideOv() {
+        const ov = document.getElementById('p3-overlay');
+        ov.classList.remove('visible');
+        ovHideTimer = setTimeout(() => {
+          if (!ov.classList.contains('visible')) { ov.style.display = 'none'; ov.innerHTML = ''; }
+        }, 450);
+      }
+
+      function renderStep(i) {
+        if (i < 0 || i >= state.steps.length) return;
+        state.currentStep = i;
+        const s = state.steps[i];
+        const svg = document.getElementById('p3-vizSvg');
+        const bc  = document.getElementById('p3-backChain');
+        const contBn = document.getElementById('p3-continueBtn');
+
+        if (s.phase === 'intro') {
+          hideOv(); svg.style.display = 'none'; bc.style.display = 'none'; contBn.style.display = 'none';
+          showOv(rsaMode ? `
+            <div class="p3-ov__label">RSA Key Generation</div>
+            <div class="p3-ov__eq-xl">gcd(e, φ(n))</div>
+            <div class="p3-ov__eq-md" style="opacity:0.6">= gcd(${s.a}, ${s.b})</div>
+            <div class="p3-ov__sep"></div>
+            <div class="p3-ov__label">Find  d = e⁻¹ mod φ(n)</div>
+            <div class="p3-ov__label" style="margin-top:4px;">Press Step or Play to begin</div>
+          ` : `
+            <div class="p3-ov__label">Extended Euclidean Algorithm</div>
+            <div class="p3-ov__eq-xl">gcd(${s.a}, ${s.b})</div>
+            <div class="p3-ov__sep"></div>
+            <div class="p3-ov__label">Press Step or Play to begin</div>
+          `);
+        } else if (s.phase === 'forward') {
+          hideOv(); svg.style.display = 'none'; bc.style.display = ''; contBn.style.display = 'none';
+          drawChain(i);
+        } else if (s.phase === 'pivot') {
+          svg.style.display = 'none'; bc.style.display = ''; contBn.style.display = 'none';
+          drawChain(i);
+          showOv(rsaMode ? `
+            <div class="p3-ov__label">Remainder = 0</div>
+            <div class="p3-ov__eq-lg">${s.a} = ${s.q}·${s.b} + 0</div>
+            <div class="p3-ov__sep"></div>
+            <div class="p3-ov__gcd">gcd(e, φ(n)) = ${s.gcd}</div>
+            <div class="p3-ov__label" style="margin-top:4px;">Back-substitution begins →</div>
+          ` : `
+            <div class="p3-ov__label">Remainder = 0</div>
+            <div class="p3-ov__eq-lg">${s.a} = ${s.q}·${s.b} + 0</div>
+            <div class="p3-ov__sep"></div>
+            <div class="p3-ov__gcd">gcd = ${s.gcd}</div>
+            <div class="p3-ov__label" style="margin-top:4px;">Back-substitution begins →</div>
+          `);
+        } else if (s.phase === 'backsub') {
+          hideOv(); svg.style.display = 'none'; bc.style.display = ''; contBn.style.display = 'none';
+          drawChain(i);
+        } else if (s.phase === 'result') {
+          svg.style.display = 'none'; bc.style.display = 'none';
+          document.getElementById('p3-continueBtn').style.display = s.inverse !== null ? '' : 'none';
+          showOv(rsaMode ? `
+            <div class="p3-ov__label">RSA Result</div>
+            <div class="p3-ov__eq-xl" style="font-size:clamp(2rem,4vw,3.5rem)">gcd(e, φ(n)) = ${s.gcd}</div>
+            <div class="p3-ov__eq-md">d = ${s.x}   <span style="opacity:0.5">(private key coefficient)</span></div>
+            <div class="p3-ov__eq-md">y = ${s.y}   <span style="opacity:0.5">(discarded)</span></div>
+            <div class="p3-ov__sep"></div>
+            <div class="p3-ov__eq-md">e·${s.x < 0 ? `(${s.x})` : s.x} + φ(n)·${s.y < 0 ? `(${s.y})` : s.y} = ${s.gcd}</div>
+          ` : `
+            <div class="p3-ov__label">Result</div>
+            <div class="p3-ov__eq-xl" style="font-size:clamp(2rem,4vw,3.5rem)">gcd(${s.a}, ${s.b}) = ${s.gcd}</div>
+            <div class="p3-ov__eq-md">x = ${s.x}</div>
+            <div class="p3-ov__eq-md">y = ${s.y}</div>
+            <div class="p3-ov__sep"></div>
+            <div class="p3-ov__eq-md">${fmtBezout(s.a, s.x, s.b, s.y, s.gcd)}</div>
+          `);
+        } else if (s.phase === 'mod-inverse') {
+          svg.style.display = 'none'; bc.style.display = '';
+          document.getElementById('p3-continueBtn').style.display = 'none';
+          hideOv(); drawChain(i);
+        }
+
+        for (let ln = 1; ln <= 10; ln++)
+          document.getElementById(`p3-pline-${ln}`)?.classList.remove('active');
+        if (s.line) {
+          document.getElementById(`p3-pline-${s.line}`)?.classList.add('active');
+          if (s.phase === 'backsub' && s.line !== 8)
+            document.getElementById('p3-pline-7')?.classList.add('active');
+        }
+
+        if (s.explanation) document.getElementById('p3-explanationBox').innerHTML = s.explanation;
+        document.getElementById('p3-stepCounter').textContent = `${i + 1} / ${state.steps.length}`;
+        document.querySelectorAll('#p3-historyBody tr')
+          .forEach((tr, ri) => tr.classList.toggle('current', ri === i - 1));
+      }
+
+      function fmtBezout(a, x, b, y, gcd) {
+        const terms = [];
+        if (x !== 0) terms.push(`${a}·${x < 0 ? '(' + x + ')' : x}`);
+        if (y !== 0) terms.push(`${b}·${y < 0 ? '(' + y + ')' : y}`);
+        return (terms.length ? terms.join(' + ') : '0') + ' = ' + gcd;
+      }
+
+      function updateStatus(s) {
+        state.status = s;
+        document.getElementById('p3-statusBadge').className = `status-badge ${s}`;
+        document.getElementById('p3-statusText').textContent =
+          ({ idle:'Idle', ready:'Ready', playing:'Playing', paused:'Paused', done:'Done' })[s] || s;
+      }
+
+      function play() {
+        if (state.isPlaying) return;
+        if (state.currentStep >= state.steps.length - 1) state.currentStep = 0;
+        state.isPlaying = true;
+        updateStatus('playing');
+        document.getElementById('p3-btnPlay').disabled  = true;
+        document.getElementById('p3-btnPause').disabled = false;
+        document.getElementById('p3-btnStep').disabled  = true;
+        document.getElementById('p3-controlsPill').classList.add('pinned');
+        function tick() {
+          if (!state.isPlaying) return;
+          if (state.currentStep >= state.steps.length - 1) { pause(); updateStatus('done'); return; }
+          renderStep(++state.currentStep);
+          const ph = state.steps[state.currentStep].phase;
+          if (ph === 'pivot' || ph === 'result') { pause(); updateStatus('paused'); return; }
+          state.playTimer = setTimeout(tick, Math.round(1000 / state.speed));
+        }
+        state.playTimer = setTimeout(tick, Math.round(1000 / state.speed));
+      }
+
+      function pause() {
+        clearTimeout(state.playTimer);
+        state.isPlaying = false;
+        updateStatus(state.currentStep >= state.steps.length - 1 ? 'done' : 'paused');
+        document.getElementById('p3-btnPlay').disabled  = false;
+        document.getElementById('p3-btnPause').disabled = true;
+        document.getElementById('p3-btnStep').disabled  = state.currentStep >= state.steps.length - 1;
+        document.getElementById('p3-controlsPill').classList.remove('pinned');
+      }
+
+      function step() {
+        if (state.isPlaying || state.currentStep >= state.steps.length - 1) return;
+        renderStep(++state.currentStep);
+        document.getElementById('p3-btnBack').disabled = false;
+        if (state.currentStep >= state.steps.length - 1) {
+          updateStatus('done');
+          document.getElementById('p3-btnStep').disabled = true;
+          document.getElementById('p3-btnPlay').disabled = true;
+        }
+      }
+
+      function stepBack() {
+        if (state.isPlaying || state.currentStep <= 0) return;
+        renderStep(--state.currentStep);
+        document.getElementById('p3-btnStep').disabled = false;
+        document.getElementById('p3-btnPlay').disabled = false;
+        if (state.currentStep <= 0) {
+          updateStatus('ready');
+          document.getElementById('p3-btnBack').disabled = true;
+        }
+      }
+
+      function reset() {
+        clearTimeout(state.playTimer); clearTimeout(ovHideTimer);
+        Object.assign(state, { steps:[], currentStep:-1, isPlaying:false, status:'idle', playTimer:null });
+        const ov = document.getElementById('p3-overlay');
+        ov.classList.remove('visible'); ov.style.display = 'none'; ov.innerHTML = '';
+        document.getElementById('p3-vizSvg').style.display = 'none';
+        document.getElementById('p3-vizSvg').innerHTML = '';
+        document.getElementById('p3-backChain').style.display = 'none';
+        document.getElementById('p3-backChain').innerHTML = '';
+        document.getElementById('p3-continueBtn').style.display = 'none';
+        document.getElementById('p3-vizIdleHint').style.display = '';
+        document.getElementById('p3-explanationBox').innerHTML =
+          'Enter values in <strong>Input &amp; Presets</strong> below, then press <strong>Build</strong> in the controls above to start.';
+        document.getElementById('p3-stepCounter').textContent   = '— / —';
+        document.getElementById('p3-statDivisions').textContent = '—';
+        document.getElementById('p3-statGCD').textContent       = '—';
+        document.getElementById('p3-statInverse').textContent   = '—';
+        document.getElementById('p3-historyBody').innerHTML =
+          '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);font-family:var(--font-ui);">No steps yet</td></tr>';
+        for (let ln = 1; ln <= 10; ln++)
+          document.getElementById(`p3-pline-${ln}`)?.classList.remove('active');
+        setMode(false);
+        updateStatus('idle');
+        ['p3-btnBack','p3-btnStep','p3-btnPlay','p3-btnPause','p3-btnReset'].forEach(id =>
+          document.getElementById(id).disabled = true);
+      }
+
+      function init() {
+        makePillController('p3-vizHero', 'p3-controlsPill');
+        document.getElementById('p3-speedSlider').addEventListener('input', function () {
+          document.getElementById('p3-speedValue').textContent = `${this.value}×`;
+          state.speed = +this.value;
+        });
+        document.getElementById('p3-btnBuild').addEventListener('click', buildSteps);
+        document.getElementById('p3-btnBack').addEventListener('click', stepBack);
+        document.getElementById('p3-btnStep').addEventListener('click', step);
+        document.getElementById('p3-btnPlay').addEventListener('click', play);
+        document.getElementById('p3-btnPause').addEventListener('click', pause);
+        document.getElementById('p3-btnReset').addEventListener('click', reset);
+        document.getElementById('p3-continueBtn').textContent = 'Continue → Modular Inverse';
+        document.getElementById('p3-continueBtn').addEventListener('click', () => {
+          renderStep(state.currentStep + 1);
+          updateStatus('done');
+          document.getElementById('p3-btnStep').disabled = true;
+          document.getElementById('p3-btnPlay').disabled = true;
+        });
+        window.p3LoadAndPlay = function(a, b) {
+          setMode(false);
+          document.getElementById('p3-inputA').value = a;
+          document.getElementById('p3-inputB').value = b;
+          buildSteps(); setTimeout(play, 300);
+        };
+        window.p3LoadRSA = function(e, phi) {
+          document.getElementById('p3-inputA').value = e;
+          document.getElementById('p3-inputB').value = phi;
+          setMode(true);
+        };
+        window.p3ResetMode = function() { setMode(false); };
+      }
+
+      return { init };
+    })();
+
+    document.addEventListener('DOMContentLoaded', () => {
+      ThemeController.init();
+      Part3.init();
+    });
+
+  </script>
+</body>
+</html>

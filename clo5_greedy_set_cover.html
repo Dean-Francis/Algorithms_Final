@@ -1,0 +1,2592 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CLO-5 — Greedy Set Cover Approximation</title>
+  <style>
+
+    /* ═══════════════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════════════ */
+    :root {
+      --accent:          #7B1FA2;
+      --accent-dim:      rgba(123,31,162,0.20);
+      --accent-glow:     rgba(123,31,162,0.35);
+
+      --font-ui:   -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+
+      --text-xs:   0.70rem;
+      --text-sm:   0.813rem;
+      --text-base: 0.9375rem;
+      --text-lg:   1.0625rem;
+      --text-xl:   1.25rem;
+      --text-2xl:  1.625rem;
+
+      --sp-xs:  4px;
+      --sp-sm:  8px;
+      --sp-md:  16px;
+      --sp-lg:  24px;
+      --sp-xl:  48px;
+
+      --radius-sm:   6px;
+      --radius-md:   10px;
+      --radius-lg:   14px;
+      --radius-pill: 999px;
+
+      --ease:        cubic-bezier(0.25, 0.1, 0.25, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --dur-fast:    150ms;
+      --dur-normal:  300ms;
+      --dur-slow:    500ms;
+    }
+
+    [data-theme="dark"] {
+      --bg-base:     #0A0A0A;
+      --bg-surface:  #141414;
+      --bg-elevated: #1C1C1E;
+      --bg-hover:    #242426;
+      --border:       rgba(255, 255, 255, 0.07);
+      --border-focus: var(--accent);
+      --text-primary:   #F2F2F7;
+      --text-secondary: #8E8E93;
+      --text-muted:     #48484A;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.7);
+      --glass-bg:     rgba(14, 14, 14, 0.75);
+      --glass-border: rgba(255, 255, 255, 0.09);
+    }
+
+    [data-theme="light"] {
+      --bg-base:     #F2F2F7;
+      --bg-surface:  #FFFFFF;
+      --bg-elevated: #E8E8ED;
+      --bg-hover:    #E0E0E5;
+      --border:       rgba(0, 0, 0, 0.10);
+      --border-focus: var(--accent);
+      --text-primary:   #1C1C1E;
+      --text-secondary: #48484A;
+      --text-muted:     #8E8E93;
+      --shadow-card:     0 1px 4px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.04);
+      --shadow-elevated: 0 8px 32px rgba(0,0,0,0.12);
+      --glass-bg:     rgba(242, 242, 247, 0.88);
+      --glass-border: rgba(0, 0, 0, 0.10);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 16px; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      transition: background var(--dur-normal) var(--ease), color var(--dur-normal) var(--ease);
+      overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       NAV RAIL
+    ═══════════════════════════════════════════════════ */
+    .nav-rail {
+      position: fixed; top: 0; left: 0;
+      height: 100vh; width: 48px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-right: 1px solid var(--glass-border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: var(--sp-lg) 0; z-index: 600; overflow: hidden;
+      transition: width var(--dur-normal) var(--ease);
+    }
+    .nav-rail:hover { width: 224px; }
+
+    .nav-logo-row {
+      display: flex; align-items: center;
+      width: 100%; padding: 0 10px;
+      gap: var(--sp-sm); flex-shrink: 0;
+    }
+    .nav-logo {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      background: none; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; overflow: hidden;
+    }
+    .nav-logo-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+      color: var(--text-primary); white-space: nowrap;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-logo-label { opacity: 1; }
+
+    .nav-sep {
+      width: calc(100% - 20px); height: 1px;
+      background: var(--border); margin: 14px 0; flex-shrink: 0;
+      opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-sep { opacity: 1; }
+
+    .nav-item {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md); cursor: pointer;
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+      color: var(--text-secondary); position: relative;
+      text-decoration: none;
+    }
+    .nav-item:hover  { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+    .nav-item.active::before {
+      content: ''; position: absolute; left: 0; top: 50%;
+      transform: translateY(-50%);
+      width: 3px; height: 18px;
+      background: var(--accent); border-radius: var(--radius-pill);
+    }
+
+    .nav-icon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .nav-label {
+      font-size: var(--text-sm); font-weight: 500;
+      white-space: nowrap; opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease);
+    }
+    .nav-rail:hover .nav-label { opacity: 1; }
+    .nav-spacer { flex: 1; }
+
+    .nav-theme-btn {
+      display: flex; align-items: center;
+      width: 100%; padding: 9px 10px; gap: var(--sp-sm);
+      border-radius: var(--radius-md);
+      cursor: pointer; background: none; border: none;
+      color: var(--text-secondary); font-family: var(--font-ui);
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+    }
+    .nav-theme-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    [data-theme="light"] .nav-rail { background: var(--bg-surface); border-right: 1px solid var(--border); }
+
+    /* ═══════════════════════════════════════════════════
+       VIZ HERO
+    ═══════════════════════════════════════════════════ */
+    .viz-hero {
+      margin-left: 48px; height: 100vh;
+      position: relative; display: flex; flex-direction: column;
+      background: var(--bg-base); overflow: hidden;
+    }
+
+    .viz-hero__title-block {
+      position: absolute; top: var(--sp-lg); left: var(--sp-lg);
+      z-index: 10; display: flex; flex-direction: column; gap: 5px;
+      pointer-events: none;
+    }
+
+    .viz-hero__badge {
+      font-size: var(--text-xs); font-weight: 600;
+      letter-spacing: 0.6px; text-transform: uppercase;
+      color: var(--accent); background: var(--accent-dim);
+      padding: 3px 9px; border-radius: var(--radius-pill); width: fit-content;
+    }
+
+    .viz-hero__title {
+      font-size: var(--text-2xl); font-weight: 700;
+      letter-spacing: -0.5px; color: var(--text-primary); line-height: 1.2;
+    }
+
+    .viz-hero__subtitle { font-size: var(--text-sm); color: var(--text-secondary); }
+
+    .viz-hero__status {
+      position: absolute; top: var(--sp-lg); right: var(--sp-lg); z-index: 10;
+    }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: var(--text-xs); font-weight: 600;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      padding: 5px 12px; border-radius: var(--radius-pill);
+      background: var(--glass-bg); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      color: var(--text-muted); transition: color var(--dur-normal) var(--ease);
+    }
+
+    .status-badge.ready   { color: #90CAF9; }
+    .status-badge.playing { color: #4CAF50; }
+    .status-badge.paused  { color: #FFC107; }
+    .status-badge.done    { color: var(--accent); }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+    }
+
+    .status-badge.playing .status-dot { animation: pulse-dot 1.2s ease infinite; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    .viz-canvas {
+      flex: 1; width: 100%; position: relative;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+
+    .viz-idle-hint {
+      display: flex; flex-direction: column; align-items: center;
+      gap: var(--sp-sm); color: var(--text-muted);
+      pointer-events: none; user-select: none;
+    }
+
+    .viz-idle-hint__icon { font-size: 3.5rem; opacity: 0.15; }
+    .viz-idle-hint__text { font-size: var(--text-sm); font-weight: 500; }
+
+    /* Floating pill */
+    .viz-controls-pill {
+      position: absolute; bottom: var(--sp-xl); left: 50%;
+      transform: translateX(-50%); z-index: 20;
+      display: flex; align-items: center; gap: var(--sp-sm);
+      padding: 10px 20px;
+      background: var(--glass-bg); backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-elevated);
+      opacity: 0; transition: opacity var(--dur-normal) var(--ease);
+      white-space: nowrap;
+    }
+
+    .viz-hero:hover .viz-controls-pill,
+    .viz-controls-pill:focus-within,
+    .viz-controls-pill.pinned { opacity: 1; }
+
+    .pill-divider { width: 1px; height: 18px; background: var(--glass-border); flex-shrink: 0; }
+
+    .pill-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 5px; font-family: var(--font-ui);
+      font-size: var(--text-xs); font-weight: 600;
+      border: none; border-radius: var(--radius-pill); cursor: pointer;
+      padding: 6px 13px;
+      transition: background var(--dur-fast) var(--ease),
+                  opacity var(--dur-fast) var(--ease),
+                  transform var(--dur-fast) var(--ease-spring);
+      background: transparent; color: var(--text-primary); letter-spacing: 0.2px;
+    }
+
+    .pill-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); }
+    [data-theme="light"] .pill-btn:hover:not(:disabled) { background: rgba(0,0,0,0.06); }
+    .pill-btn:active:not(:disabled) { transform: scale(0.93); }
+    .pill-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .pill-btn--primary { background: var(--accent); color: #fff; }
+    .pill-btn--primary:hover:not(:disabled) { filter: brightness(0.85); background: var(--accent); }
+    .pill-btn-icon { font-size: 12px; }
+
+    .pill-step-counter {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--text-secondary); min-width: 46px; text-align: center;
+    }
+
+    .pill-speed-row { display: flex; align-items: center; gap: var(--sp-xs); }
+
+    .pill-speed-label {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--accent); min-width: 26px; text-align: right;
+    }
+
+    .pill-slider {
+      -webkit-appearance: none; appearance: none;
+      width: 70px; height: 3px; background: var(--glass-border);
+      border-radius: var(--radius-pill); outline: none; cursor: pointer;
+    }
+
+    .pill-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+      transition: transform var(--dur-fast) var(--ease-spring);
+    }
+    .pill-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+    .pill-legend { display: flex; align-items: center; gap: var(--sp-md); }
+    .pill-legend-item {
+      display: flex; align-items: center; gap: 4px;
+      font-size: var(--text-xs); color: var(--text-secondary);
+    }
+    .pill-legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    .scroll-hint {
+      position: absolute; bottom: var(--sp-lg); right: var(--sp-lg);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      color: var(--text-muted); font-size: var(--text-xs);
+      animation: bounce 2s ease infinite;
+      pointer-events: none; user-select: none;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50%       { transform: translateY(6px); opacity: 0.9; }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       BELOW FOLD
+    ═══════════════════════════════════════════════════ */
+    .below-fold {
+      display: flex; flex-direction: column; gap: var(--sp-md);
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-xl);
+      margin-left: 48px;
+    }
+
+    .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-md); }
+
+    .panel {
+      background: var(--bg-surface); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card); border: 1px solid var(--border); overflow: hidden;
+    }
+
+    .panel-header { padding: var(--sp-sm) var(--sp-md); border-bottom: 1px solid var(--border); }
+    .panel-title {
+      font-size: var(--text-xs); font-weight: 600;
+      letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted);
+    }
+    .panel-body { padding: var(--sp-md); }
+
+    /* Pseudocode */
+    .pseudocode-block {
+      font-family: var(--font-mono); font-size: var(--text-sm);
+      line-height: 1.9; background: var(--bg-elevated);
+      border-radius: var(--radius-md); padding: var(--sp-sm) var(--sp-md);
+      overflow-x: auto;
+    }
+
+    .code-line {
+      display: flex; gap: var(--sp-md);
+      padding: 1px var(--sp-xs); border-radius: var(--radius-sm);
+      cursor: default; transition: background var(--dur-fast) var(--ease);
+      position: relative;
+    }
+    .code-line:hover { background: var(--bg-hover); }
+    .code-line.active { background: var(--accent-dim); color: var(--accent); }
+    .code-line.active::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+      width: 2px; background: var(--accent); border-radius: var(--radius-pill);
+    }
+    .line-num {
+      color: var(--text-muted); min-width: 18px; text-align: right;
+      user-select: none; flex-shrink: 0;
+    }
+
+    .code-line[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute; left: 100%; top: 50%;
+      transform: translateY(-50%); margin-left: var(--sp-sm);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: var(--sp-xs) var(--sp-sm);
+      font-size: var(--text-xs); color: var(--text-secondary);
+      white-space: nowrap; z-index: 50; box-shadow: var(--shadow-elevated);
+      font-family: var(--font-ui); pointer-events: none;
+    }
+
+    /* Explanation box */
+    .explanation-box {
+      background: var(--bg-elevated); border-radius: var(--radius-md);
+      border-left: 3px solid var(--accent); padding: var(--sp-md);
+      font-size: var(--text-sm); color: var(--text-secondary);
+      line-height: 1.75; min-height: 52px;
+    }
+    .explanation-box strong { color: var(--text-primary); }
+    .explanation-box .mono {
+      font-family: var(--font-mono); color: var(--accent); font-size: var(--text-xs);
+    }
+
+    /* Collapsible */
+    .collapsible {
+      background: var(--bg-surface); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card); border: 1px solid var(--border); overflow: hidden;
+    }
+    .collapsible-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-md) var(--sp-lg); cursor: pointer; user-select: none;
+      transition: background var(--dur-fast) var(--ease);
+    }
+    .collapsible-header:hover { background: var(--bg-hover); }
+    .collapsible-header-left { display: flex; align-items: center; gap: var(--sp-sm); }
+    .collapsible-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+    .collapsible-hint  { font-size: var(--text-xs); color: var(--text-muted); }
+    .collapsible-chevron {
+      color: var(--text-muted); font-size: 11px;
+      transition: transform var(--dur-normal) var(--ease);
+    }
+    .collapsible.open .collapsible-chevron { transform: rotate(90deg); }
+    .collapsible-body { max-height: 0; overflow: hidden; transition: max-height var(--dur-slow) var(--ease); }
+    .collapsible.open .collapsible-body { max-height: 4000px; }
+    .collapsible-inner { padding: 0 var(--sp-lg) var(--sp-lg); border-top: 1px solid var(--border); }
+
+    /* Input */
+    .input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-md); margin-top: var(--sp-md); }
+    .input-grid--1col { grid-template-columns: 1fr; }
+    .input-group { display: flex; flex-direction: column; gap: var(--sp-xs); }
+    .input-label {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .input-field {
+      font-family: var(--font-mono); font-size: var(--text-base);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 8px 12px;
+      color: var(--text-primary); outline: none; width: 100%;
+      transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+      resize: vertical;
+    }
+    .input-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+    .presets-row {
+      display: flex; gap: var(--sp-sm); flex-wrap: wrap;
+      margin-top: var(--sp-md); align-items: center;
+    }
+    .presets-label {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .preset-btn {
+      font-size: var(--text-xs); font-weight: 500; padding: 5px 11px;
+      border-radius: var(--radius-pill); background: var(--bg-elevated);
+      border: 1px solid var(--border); color: var(--text-secondary);
+      cursor: pointer; font-family: var(--font-ui);
+      transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+    }
+    .preset-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+    /* Stats */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--sp-md); margin-top: var(--sp-md);
+    }
+    .stat-card {
+      background: var(--bg-elevated); border-radius: var(--radius-md);
+      padding: var(--sp-md); display: flex; flex-direction: column; gap: 4px;
+    }
+    .stat-value {
+      font-size: var(--text-xl); font-weight: 700;
+      font-family: var(--font-mono); color: var(--text-primary);
+    }
+    .stat-label { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; }
+
+    /* History table */
+    .history-wrapper {
+      max-height: 220px; overflow-y: auto;
+      border-radius: var(--radius-md); border: 1px solid var(--border); margin-top: var(--sp-md);
+    }
+    .history-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--text-sm); }
+    .history-table th {
+      text-align: left; padding: var(--sp-sm) var(--sp-md);
+      font-size: var(--text-xs); font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-ui); background: var(--bg-elevated);
+    }
+    .history-table td {
+      padding: var(--sp-sm) var(--sp-md); color: var(--text-secondary);
+      border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background var(--dur-fast) var(--ease);
+    }
+    .history-table tr:hover td   { background: var(--bg-hover); color: var(--text-primary); }
+    .history-table tr.current td { background: var(--accent-dim); color: var(--accent); }
+
+    /* Educational */
+    .edu-content { margin-top: var(--sp-md); display: flex; flex-direction: column; gap: var(--sp-md); }
+    .edu-p { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.7; }
+    .key-concept {
+      background: var(--accent-dim); border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: var(--sp-md) var(--sp-lg);
+    }
+    .key-concept-title {
+      font-size: var(--text-xs); font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px;
+    }
+    .key-concept-body { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6; }
+    .key-concept-body .mono { font-family: var(--font-mono); color: var(--accent); font-size: var(--text-xs); }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: var(--radius-pill); }
+
+    @media (max-width: 768px) {
+      .info-row   { grid-template-columns: 1fr; }
+      .input-grid { grid-template-columns: 1fr 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ─── Part 5 — Greedy Set Cover ──────────── */
+    .p5-viz-layout {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      padding: 72px var(--sp-lg) var(--sp-lg) var(--sp-lg);
+      gap: var(--sp-md); overflow: hidden;
+    }
+
+    /* Universe chips */
+    .p5-universe-area { display: flex; flex-direction: column; gap: var(--sp-xs); flex-shrink: 0; }
+    .p5-area-label {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .p5-chips {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .p5-chip {
+      width: 48px; height: 48px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: var(--text-base);
+      border: 2px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      transition: all 0.35s var(--ease);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .p5-chip.covered {
+      border-width: 2px;
+      color: var(--text-primary);
+    }
+    .p5-chip.uncovered { opacity: 0.35; }
+    .p5-chip .p5-chip-tag {
+      position: absolute; bottom: 2px; right: 3px;
+      font-size: 8px; font-weight: 700;
+    }
+
+    /* Progress bar */
+    .p5-progress-area { flex-shrink: 0; }
+    .p5-progress-label {
+      display: flex; justify-content: space-between;
+      font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 4px;
+    }
+    .p5-progress-bg {
+      height: 6px; border-radius: var(--radius-pill);
+      background: var(--bg-elevated); overflow: hidden;
+    }
+    .p5-progress-fill {
+      height: 100%; border-radius: var(--radius-pill);
+      background: var(--accent); transition: width 0.45s var(--ease);
+      width: 0%;
+    }
+
+    /* Sets area */
+    .p5-sets-area { display: flex; flex-direction: column; gap: var(--sp-xs); flex: 1; min-height: 0; }
+    .p5-sets-row {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      flex: 1; align-content: flex-start; overflow-y: auto;
+    }
+    .p5-set-card {
+      border: 2px solid var(--border); border-radius: var(--radius-md);
+      padding: 10px 14px; min-width: 100px;
+      background: var(--bg-elevated);
+      transition: all 0.3s var(--ease);
+      cursor: default;
+    }
+    .p5-set-card .p5-sc-name {
+      font-weight: 700; font-size: var(--text-sm); margin-bottom: 4px;
+    }
+    .p5-set-card .p5-sc-elems {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--text-secondary); word-break: break-all;
+    }
+    .p5-set-card .p5-sc-new {
+      margin-top: 4px; font-size: var(--text-xs);
+      font-weight: 600; color: var(--accent);
+    }
+    .p5-set-card.candidate { border-color: var(--accent); background: var(--accent-dim); }
+    .p5-set-card.chosen    { border-width: 2px; }
+    .p5-set-card.chosen .p5-sc-name::after { content: ' ✓'; }
+    .p5-set-card.exhausted { opacity: 0.35; }
+
+    /* Approx box */
+    .p5-approx-box {
+      position: absolute; bottom: 80px; right: var(--sp-lg);
+      background: var(--glass-bg); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border); border-radius: var(--radius-lg);
+      padding: var(--sp-md); min-width: 200px; font-size: var(--text-sm);
+    }
+    .p5-approx-title {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+    }
+    .p5-approx-row {
+      display: flex; justify-content: space-between; padding: 2px 0;
+      font-size: var(--text-xs);
+    }
+    .p5-approx-val { font-weight: 700; font-family: var(--font-mono); }
+    .p5-approx-val.good { color: #4CAF50; }
+    .p5-approx-val.warn { color: #FFC107; }
+
+    .p5-stat-accent { color: var(--accent); font-weight: 700; }
+
+    /* ═══════════════════════════════════════════════════
+       MODE SELECTION OVERLAY
+    ═══════════════════════════════════════════════════ */
+    .mode-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: var(--bg-base);
+      display: flex; align-items: center; justify-content: center;
+      padding: var(--sp-lg);
+      transition: opacity var(--dur-slow) var(--ease);
+    }
+    .mode-overlay.fade-out { opacity: 0; pointer-events: none; }
+
+    .mode-modal {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 32px; max-width: 700px; width: 100%;
+    }
+    .mode-modal__eyebrow {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); padding: 4px 12px;
+      border-radius: var(--radius-pill);
+    }
+    .mode-modal__heading {
+      text-align: center; display: flex; flex-direction: column; gap: 8px;
+    }
+    .mode-modal__title {
+      font-size: 2rem; font-weight: 700; letter-spacing: -0.6px;
+      color: var(--text-primary); line-height: 1.15;
+    }
+    .mode-modal__sub {
+      font-size: var(--text-base); color: var(--text-secondary); line-height: 1.6;
+    }
+    .mode-cards {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: var(--sp-lg); width: 100%;
+    }
+    .mode-card {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px 28px;
+      cursor: pointer; display: flex; flex-direction: column;
+      gap: var(--sp-md); position: relative; overflow: hidden;
+      box-shadow: var(--shadow-card);
+      transition: transform var(--dur-normal) var(--ease-spring),
+                  box-shadow var(--dur-normal) var(--ease),
+                  border-color var(--dur-normal) var(--ease);
+    }
+    .mode-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: var(--accent-dim); opacity: 0;
+      transition: opacity var(--dur-normal) var(--ease); pointer-events: none;
+    }
+    .mode-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-elevated); border-color: var(--accent); }
+    .mode-card:hover::before { opacity: 1; }
+    .mode-card__icon {
+      font-size: 1.75rem; width: 52px; height: 52px;
+      background: var(--accent-dim); border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mode-card__title {
+      font-size: var(--text-xl); font-weight: 700; color: var(--text-primary);
+    }
+    .mode-card__desc {
+      font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.65; flex: 1;
+    }
+    .mode-card__cta {
+      font-size: var(--text-xs); font-weight: 600; color: var(--accent);
+      margin-top: var(--sp-sm);
+    }
+    .mode-footer {
+      font-size: var(--text-xs); color: var(--text-muted); text-align: center;
+    }
+    @media (max-width: 600px) { .mode-cards { grid-template-columns: 1fr; } }
+
+    /* ═══════════════════════════════════════════════════
+       LEARNING VIEW
+    ═══════════════════════════════════════════════════ */
+    #learning-view { display: none; }
+
+    .learn-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--glass-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid var(--glass-border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px var(--sp-lg); gap: var(--sp-md);
+    }
+    .learn-header__left { display: flex; align-items: center; gap: var(--sp-sm); }
+    .learn-header__badge {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.6px;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); padding: 3px 9px; border-radius: var(--radius-pill);
+    }
+    .learn-header__title {
+      font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); white-space: nowrap;
+    }
+    .learn-header__right { display: flex; align-items: center; gap: var(--sp-sm); flex-shrink: 0; }
+    .learn-pager-btn {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--bg-elevated);
+      color: var(--text-secondary); cursor: pointer; font-size: 15px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all var(--dur-fast) var(--ease);
+    }
+    .learn-pager-btn:hover:not(:disabled) { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .learn-pager-btn:disabled { opacity: 0.28; cursor: not-allowed; }
+    .learn-page-ind {
+      font-size: var(--text-xs); font-weight: 600; color: var(--text-muted);
+      font-family: var(--font-mono); min-width: 44px; text-align: center;
+    }
+    .learn-switch-btn {
+      font-size: var(--text-xs); font-weight: 600; padding: 5px 12px;
+      border-radius: var(--radius-pill); border: 1px solid var(--border);
+      background: var(--bg-elevated); color: var(--text-secondary);
+      cursor: pointer; font-family: var(--font-ui);
+      transition: all var(--dur-fast) var(--ease);
+    }
+    .learn-switch-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    /* Learning hero — title block in normal flow (not absolute) */
+    #learn-vizHero { flex-direction: column; }
+    #learn-vizHero .viz-hero__title-block {
+      position: relative; top: auto; left: auto;
+      pointer-events: auto;
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-md);
+      z-index: 10;
+    }
+    #learn-vizHero .viz-hero__status {
+      position: absolute; top: var(--sp-lg); right: var(--sp-lg);
+    }
+
+    /* Each page fills the remaining canvas stage */
+    .learn-page {
+      display: none; height: 100%; width: 100%;
+      padding: 20px 52px 108px;
+      box-sizing: border-box; overflow: hidden;
+    }
+    .learn-page.active {
+      display: flex; flex-direction: column;
+      animation: learnFadeIn var(--dur-normal) var(--ease);
+    }
+    @keyframes learnFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    /* Slide two-column helper */
+    .lp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-xl); flex: 1; min-height: 0; }
+    .lp-col  { display: flex; flex-direction: column; gap: var(--sp-md); min-height: 0; }
+    .lp-col--wide  { grid-column: span 2; }
+
+    /* Slide visual stage */
+    .lp-stage {
+      flex: 1; min-height: 0;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: var(--sp-lg);
+      display: flex; flex-direction: column; gap: var(--sp-md); overflow: hidden;
+    }
+
+    /* ─── Whiteboard step reveals ─── */
+    .lp-step {
+      opacity: 0; transform: translateY(14px);
+      transition: opacity 0.45s ease, transform 0.45s ease;
+      pointer-events: none;
+    }
+    .lp-step.revealed { opacity: 1; transform: none; pointer-events: auto; }
+
+    /* SVG diagram layers — same reveal system, no slide */
+    .svg-layer { opacity: 0; transition: opacity 0.55s ease; }
+    .svg-layer.revealed { opacity: 1; }
+
+    /* Whiteboard typography */
+    .lp-wb-line {
+      font-size: 1.4rem; font-weight: 500;
+      color: var(--text-primary); line-height: 1.5;
+      margin-bottom: var(--sp-lg);
+    }
+    .lp-wb-line strong { font-weight: 800; }
+    .lp-wb-line .dim   { color: var(--text-muted); font-size: 1.15rem; font-weight: 400; }
+    .lp-wb-line .mono  { font-family: var(--font-mono); color: var(--accent); }
+
+    /* Universe element circles */
+    .lp-elem-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: var(--sp-xl); }
+    .lp-elem {
+      width: 50px; height: 50px; border-radius: 50%;
+      border: 2px solid var(--text-muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-lg); font-weight: 700;
+      color: var(--text-primary); background: transparent; flex-shrink: 0;
+    }
+
+    /* Set rows */
+    .lp-set-rows { display: flex; flex-direction: column; gap: 14px; }
+    .lp-set-row  { display: flex; align-items: center; gap: var(--sp-md); }
+    .lp-set-label {
+      font-size: var(--text-base); font-weight: 700;
+      min-width: 32px; text-align: right;
+      font-family: var(--font-mono);
+    }
+    .lp-equals { font-size: var(--text-base); color: var(--text-muted); font-family: var(--font-mono); }
+    .lp-set-elems { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ─── Learning page shared components ─── */
+    .lp-eyebrow {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: var(--sp-sm);
+    }
+    .lp-title {
+      font-size: 2.25rem; font-weight: 700; letter-spacing: -0.6px;
+      color: var(--text-primary); line-height: 1.15; margin-bottom: var(--sp-md);
+    }
+    .lp-lead {
+      font-size: var(--text-lg); color: var(--text-secondary);
+      line-height: 1.7; max-width: 640px; margin-bottom: var(--sp-xl);
+    }
+    .lp-section { margin-top: var(--sp-xl); }
+    .lp-section-title {
+      font-size: var(--text-xs); font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: var(--sp-md);
+    }
+
+    /* Visual illustration */
+    .lp-visual {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: var(--sp-lg) var(--sp-xl);
+      display: flex; flex-direction: column; gap: var(--sp-lg);
+      margin-bottom: var(--sp-xl);
+    }
+    .lp-visual-label {
+      font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.8px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .lp-chips-row { display: flex; flex-wrap: wrap; gap: var(--sp-sm); align-items: center; }
+    .lp-chip {
+      width: 44px; height: 44px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: var(--text-base);
+      border: 2px solid var(--border); background: var(--bg-elevated);
+      color: var(--text-secondary); flex-shrink: 0;
+      transition: all var(--dur-normal) var(--ease);
+    }
+    .lp-chip.c1 { background: rgba(123,31,162,0.18); border-color: #7B1FA2; color: #CE93D8; }
+    .lp-chip.c2 { background: rgba(2,136,209,0.18);  border-color: #0288D1; color: #81D4FA; }
+    .lp-chip.c3 { background: rgba(230,81,0,0.18);   border-color: #E65100; color: #FFCC80; }
+    .lp-sets-row { display: flex; flex-wrap: wrap; gap: var(--sp-md); }
+    .lp-set-card {
+      border-radius: var(--radius-md); padding: 12px 16px;
+      border: 2px solid; display: flex; flex-direction: column; gap: 4px;
+      min-width: 120px;
+    }
+    .lp-set-card-name { font-weight: 700; font-size: var(--text-sm); }
+    .lp-set-card-elems {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--text-secondary);
+    }
+    .lp-divider {
+      height: 1px; background: var(--border); margin: var(--sp-xs) 0;
+    }
+    .lp-cover-row { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; }
+    .lp-cover-tag {
+      font-size: var(--text-xs); font-weight: 600; padding: 3px 10px;
+      border-radius: var(--radius-pill); border: 1px solid;
+    }
+    .lp-cover-arrow { color: var(--text-muted); font-size: var(--text-sm); }
+
+    /* Analogy cards */
+    .lp-analogy-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--sp-md); margin-top: var(--sp-md);
+    }
+    .lp-analogy-card {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: var(--sp-md);
+      display: flex; flex-direction: column; gap: var(--sp-sm);
+    }
+    .lp-analogy-icon { font-size: 1.5rem; }
+    .lp-analogy-title { font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); }
+    .lp-analogy-body { font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.6; }
+
+  </style>
+</head>
+<body>
+
+  <!-- MODE SELECTION OVERLAY -->
+  <div class="mode-overlay" id="modeOverlay">
+    <div class="mode-modal">
+      <span class="mode-modal__eyebrow">CLO-5 · Greedy Set Cover</span>
+      <div class="mode-modal__heading">
+        <h1 class="mode-modal__title">Choose Your Experience</h1>
+        <p class="mode-modal__sub">How would you like to explore the Greedy Set Cover algorithm?</p>
+      </div>
+      <div class="mode-cards">
+        <div class="mode-card" id="btn-learning">
+          <div class="mode-card__icon">📖</div>
+          <div class="mode-card__title">Learning Mode</div>
+          <div class="mode-card__desc">Guided walkthrough with explanations, key concepts, and worked examples. Perfect for building intuition from the ground up.</div>
+          <div class="mode-card__cta">Start Learning →</div>
+        </div>
+        <div class="mode-card" id="btn-solving">
+          <div class="mode-card__icon">⚙︎</div>
+          <div class="mode-card__title">Solving Mode</div>
+          <div class="mode-card__desc">Interactive algorithm simulator. Load presets or custom inputs and step through the greedy selection process live.</div>
+          <div class="mode-card__cta">Open Simulator →</div>
+        </div>
+      </div>
+      <div class="mode-footer">You can switch between modes at any time.</div>
+    </div>
+  </div>
+
+  <!-- NAV RAIL -->
+  <nav class="nav-rail">
+    <div class="nav-logo-row">
+      <div class="nav-logo">
+        <img src="maple-logo.jpg" alt="CUD"
+             style="width:36px;height:36px;object-fit:contain;display:block;" />
+      </div>
+      <span class="nav-logo-label">Canadian University Dubai</span>
+    </div>
+    <div class="nav-sep"></div>
+    <a href="index.html"                             class="nav-item"><div class="nav-icon">▦</div><span class="nav-label">Home</span></a>
+    <a href="clo2_parallel_merge_sort.html"          class="nav-item"><div class="nav-icon">⇅</div><span class="nav-label">Parallel Sort</span></a>
+    <a href="clo3_extended_euclidean.html"           class="nav-item"><div class="nav-icon">∑</div><span class="nav-label">Extended GCD</span></a>
+    <a href="clo4_line_segment_intersection.html"    class="nav-item"><div class="nav-icon">⟋</div><span class="nav-label">Sweep Line</span></a>
+    <a href="clo5_greedy_set_cover.html"             class="nav-item active"><div class="nav-icon">⊆</div><span class="nav-label">Set Cover</span></a>
+    <div class="nav-spacer"></div>
+    <button class="nav-theme-btn" id="themeToggle">
+      <div class="nav-icon" id="themeIcon">🌙</div>
+      <span class="nav-label" id="themeLabel">Light Mode</span>
+    </button>
+  </nav>
+
+  <!-- LEARNING VIEW -->
+  <div id="learning-view">
+    <section class="viz-hero" id="learn-vizHero">
+
+      <div class="viz-hero__title-block">
+        <span class="viz-hero__badge">CLO-5 · Learning</span>
+        <h1 class="viz-hero__title">Greedy Set Cover</h1>
+        <span class="viz-hero__subtitle">Guided walkthrough — concepts, theory, and examples</span>
+      </div>
+
+      <div class="viz-hero__status">
+        <div class="status-badge ready" id="learn-statusBadge">
+          <span class="status-dot"></span>
+          <span id="learn-statusText">Page 1 of 4</span>
+        </div>
+      </div>
+
+      <div class="viz-canvas" id="learn-canvas"
+           style="overflow:hidden; align-items:stretch; justify-content:stretch; padding:0; position:relative;">
+        <div style="width:100%; height:100%; display:flex; flex-direction:column;">
+          <div class="learn-page active" id="learn-p1">
+            <div style="display:flex; gap:var(--sp-xl); height:100%; align-items:flex-start;">
+
+              <!-- Left: text steps -->
+              <div style="flex:0 0 40%; display:flex; flex-direction:column; gap:var(--sp-xl); padding-top:var(--sp-sm);">
+
+                <div class="lp-step" data-step="1">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Let <strong>U</strong> be some ground set <span class="dim">(universe)</span>
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.7;">
+                    U holds every element we need to cover — nothing is left out.
+                  </div>
+                </div>
+
+                <div class="lp-step" data-step="2">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    let <strong>S</strong> be a family of subsets of U,
+                    where <span class="mono">∪S = U</span>
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.7;">
+                    Each set Sᵢ covers some elements. Together they span all of U.
+                  </div>
+                </div>
+
+                <div class="lp-step" data-step="3">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm); color:#CE93D8;">
+                    Goal: cover <strong>all</strong> elements using as <strong>few sets</strong> as possible
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.7;">
+                    Picking every set always works — but that's wasteful. We want the
+                    smallest sub-collection <span style="font-family:var(--font-mono);color:#9C27B0;">C ⊆ S</span>
+                    such that <span style="font-family:var(--font-mono);color:#9C27B0;">∪C = U</span>.
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Right: SVG visual -->
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; height:100%;">
+                <svg viewBox="0 0 380 260" xmlns="http://www.w3.org/2000/svg"
+                     style="width:100%; max-width:440px; overflow:visible;">
+
+                  <!-- ── Layer 2: set circles (revealed at step 2) ── -->
+                  <g class="svg-layer" data-min-step="2">
+                    <!-- S₁: covers e1, e2, e3 -->
+                    <ellipse cx="108" cy="118" rx="70" ry="70"
+                             fill="rgba(74,20,140,0.18)" stroke="#6A1B9A" stroke-width="1.8"/>
+                    <text x="50" y="56" fill="#7B1FA2" font-size="14" font-weight="700"
+                          font-family="monospace" font-style="italic">S₁</text>
+
+                    <!-- S₂: covers e3, e4, e5 -->
+                    <ellipse cx="213" cy="112" rx="80" ry="74"
+                             fill="rgba(123,31,162,0.13)" stroke="#9C27B0" stroke-width="1.8"/>
+                    <text x="196" y="46" fill="#9C27B0" font-size="14" font-weight="700"
+                          font-family="monospace" font-style="italic">S₂</text>
+
+                    <!-- S₃: covers e5, e6 -->
+                    <ellipse cx="308" cy="126" rx="60" ry="60"
+                             fill="rgba(156,39,176,0.10)" stroke="#CE93D8" stroke-width="1.8"/>
+                    <text x="333" y="74" fill="#CE93D8" font-size="14" font-weight="700"
+                          font-family="monospace" font-style="italic">S₃</text>
+                  </g>
+
+                  <!-- ── Layer 1: universe dots (revealed at step 1) ── -->
+                  <g class="svg-layer" data-min-step="1">
+                    <!-- U label -->
+                    <text x="8" y="210" fill="#4A148C" font-size="12" font-weight="600"
+                          font-family="monospace">U = { 1, 2, 3, 4, 5, 6 }</text>
+
+                    <!-- e1 -->
+                    <circle cx="60"  cy="132" r="19" fill="rgba(74,20,140,0.40)" stroke="#7B1FA2" stroke-width="1.5"/>
+                    <text   x="60"  y="137" fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <!-- e2 -->
+                    <circle cx="103" cy="82"  r="19" fill="rgba(74,20,140,0.40)" stroke="#7B1FA2" stroke-width="1.5"/>
+                    <text   x="103" y="87"  fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <!-- e3  (S₁ ∩ S₂) -->
+                    <circle cx="158" cy="132" r="19" fill="rgba(106,27,154,0.50)" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="158" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <!-- e4 -->
+                    <circle cx="222" cy="80"  r="19" fill="rgba(74,20,140,0.40)" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="222" y="85"  fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <!-- e5  (S₂ ∩ S₃) -->
+                    <circle cx="272" cy="132" r="19" fill="rgba(123,31,162,0.50)" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="272" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <!-- e6 -->
+                    <circle cx="335" cy="132" r="19" fill="rgba(74,20,140,0.40)" stroke="#CE93D8" stroke-width="1.5"/>
+                    <text   x="335" y="137" fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                  </g>
+
+                  <!-- ── Layer 3: goal confirmation (revealed at step 3) ── -->
+                  <g class="svg-layer" data-min-step="3">
+                    <text x="190" y="230" fill="#9C27B0" font-size="12" font-weight="600"
+                          text-anchor="middle" font-family="monospace">S₁ ∪ S₂ ∪ S₃ = U  ✓</text>
+                    <!-- subtle glow rings on all three circles -->
+                    <ellipse cx="108" cy="118" rx="70" ry="70"
+                             fill="none" stroke="#7B1FA2" stroke-width="1" opacity="0.5"
+                             style="filter:drop-shadow(0 0 6px #7B1FA2)"/>
+                    <ellipse cx="213" cy="112" rx="80" ry="74"
+                             fill="none" stroke="#9C27B0" stroke-width="1" opacity="0.5"
+                             style="filter:drop-shadow(0 0 6px #9C27B0)"/>
+                    <ellipse cx="308" cy="126" rx="60" ry="60"
+                             fill="none" stroke="#CE93D8" stroke-width="1" opacity="0.5"
+                             style="filter:drop-shadow(0 0 6px #CE93D8)"/>
+                  </g>
+
+                </svg>
+              </div>
+
+            </div>
+          </div>
+          <div class="learn-page" id="learn-p2">
+            <div style="display:flex; gap:var(--sp-xl); height:100%; align-items:flex-start;">
+
+              <!-- Left: text steps -->
+              <div style="flex:0 0 55%; display:flex; flex-direction:column; gap:var(--sp-xl); padding-top:var(--sp-sm);">
+
+                <div class="lp-step" data-step="1">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Finding the <strong>smallest</strong> number of sets is computationally difficult
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.8;">
+                    With <span style="font-family:var(--font-mono);color:#9C27B0;">m</span> sets,
+                    there are <span style="font-family:var(--font-mono);color:#9C27B0;">2ᵐ</span> possible
+                    sub-collections to check.<br>
+                    For <span style="font-family:var(--font-mono);color:#9C27B0;">m = 50</span> that is
+                    over a quadrillion combinations.
+                  </div>
+                </div>
+
+                <div class="lp-step" data-step="2">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm); color:#CE93D8;">
+                    Set Cover is <strong style="color:#E1BEE7;">NP-hard</strong>
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.8;">
+                    No known algorithm solves it exactly in polynomial time.<br>
+                    Instead of searching for the perfect answer, we use a
+                    <span style="font-family:var(--font-mono);color:#9C27B0;">greedy approximation</span>
+                    that runs fast and gets close.
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Right: faded continuity visual (same diagram, ghosted) -->
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; height:100%;">
+                <div class="svg-layer" data-min-step="1" style="width:100%; max-width:420px;">
+                  <svg viewBox="0 0 380 260" xmlns="http://www.w3.org/2000/svg"
+                       style="width:100%; opacity:0.18; overflow:visible;">
+                    <!-- circles -->
+                    <ellipse cx="108" cy="118" rx="70" ry="70" fill="rgba(74,20,140,0.18)" stroke="#6A1B9A" stroke-width="1.8"/>
+                    <ellipse cx="213" cy="112" rx="80" ry="74" fill="rgba(123,31,162,0.13)" stroke="#9C27B0" stroke-width="1.8"/>
+                    <ellipse cx="308" cy="126" rx="60" ry="60" fill="rgba(156,39,176,0.10)" stroke="#CE93D8" stroke-width="1.8"/>
+                    <!-- dots -->
+                    <circle cx="60"  cy="132" r="19" fill="rgba(74,20,140,0.40)" stroke="#7B1FA2" stroke-width="1.5"/>
+                    <circle cx="103" cy="82"  r="19" fill="rgba(74,20,140,0.40)" stroke="#7B1FA2" stroke-width="1.5"/>
+                    <circle cx="158" cy="132" r="19" fill="rgba(106,27,154,0.50)" stroke="#9C27B0" stroke-width="1.5"/>
+                    <circle cx="222" cy="80"  r="19" fill="rgba(74,20,140,0.40)" stroke="#9C27B0" stroke-width="1.5"/>
+                    <circle cx="272" cy="132" r="19" fill="rgba(123,31,162,0.50)" stroke="#AB47BC" stroke-width="1.5"/>
+                    <circle cx="335" cy="132" r="19" fill="rgba(74,20,140,0.40)" stroke="#CE93D8" stroke-width="1.5"/>
+                  </svg>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div class="learn-page" id="learn-p3">
+            <div style="display:flex; gap:var(--sp-xl); height:100%; align-items:flex-start;">
+
+              <!-- Left: text steps -->
+              <div style="flex:0 0 50%; display:flex; flex-direction:column; gap:var(--sp-xl); padding-top:var(--sp-sm);">
+
+                <div class="lp-step" data-step="1">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Greedy idea: repeatedly pick the set that covers the
+                    <strong>most uncovered elements</strong>
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.8;">
+                    At each round, look at what is still uncovered and choose the
+                    set that eliminates the most of it.
+                  </div>
+                </div>
+
+                <div class="lp-step" data-step="2">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Continue until <strong>all</strong> elements are covered
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.8;">
+                    Repeat the same greedy pick with the remaining uncovered elements
+                    until none are left.
+                  </div>
+                </div>
+
+                <div class="lp-step" data-step="3">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm); color:#CE93D8;">
+                    Each step reduces uncovered elements <strong>as much as possible</strong>
+                  </div>
+                  <div style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.8;">
+                    This local-best choice is the greedy heuristic. It will not always
+                    find the smallest cover, but it gets close — fast.
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Right: SVG — greedy selection unfolding -->
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; height:100%;">
+                <svg viewBox="0 0 380 270" xmlns="http://www.w3.org/2000/svg"
+                     style="width:100%; max-width:440px; overflow:visible;">
+
+                  <!-- ── Base: circles + all dim dots (step 1) ── -->
+                  <g class="svg-layer" data-min-step="1">
+                    <!-- circles, dim -->
+                    <ellipse cx="108" cy="118" rx="70" ry="70" fill="rgba(74,20,140,0.14)" stroke="#6A1B9A" stroke-width="1.5"/>
+                    <ellipse cx="213" cy="112" rx="80" ry="74" fill="rgba(123,31,162,0.10)" stroke="#9C27B0" stroke-width="1.5" opacity="0.5"/>
+                    <ellipse cx="308" cy="126" rx="60" ry="60" fill="rgba(156,39,176,0.07)" stroke="#CE93D8" stroke-width="1.5" opacity="0.35"/>
+                    <!-- set labels -->
+                    <text x="50"  y="56"  fill="#7B1FA2" font-size="13" font-weight="700" font-family="monospace" font-style="italic">S₁</text>
+                    <text x="196" y="46"  fill="#9C27B0" font-size="13" font-weight="700" font-family="monospace" font-style="italic" opacity="0.5">S₂</text>
+                    <text x="333" y="74"  fill="#CE93D8" font-size="13" font-weight="700" font-family="monospace" font-style="italic" opacity="0.35">S₃</text>
+                    <!-- dim (uncovered) dots -->
+                    <circle cx="60"  cy="132" r="19" fill="rgba(74,20,140,0.20)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="60"  y="137" fill="#6A1B9A" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="103" cy="82"  r="19" fill="rgba(74,20,140,0.20)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="103" y="87"  fill="#6A1B9A" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="158" cy="132" r="19" fill="rgba(74,20,140,0.20)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="158" y="137" fill="#6A1B9A" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <circle cx="222" cy="80"  r="19" fill="rgba(74,20,140,0.20)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="222" y="85"  fill="#6A1B9A" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="272" cy="132" r="19" fill="rgba(74,20,140,0.20)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="272" y="137" fill="#6A1B9A" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <circle cx="335" cy="132" r="19" fill="rgba(74,20,140,0.20)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="335" y="137" fill="#6A1B9A" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                    <!-- S₁ selected glow + label -->
+                    <ellipse cx="108" cy="118" rx="70" ry="70" fill="none"
+                             stroke="#7B1FA2" stroke-width="2.5" style="filter:drop-shadow(0 0 8px #7B1FA2)"/>
+                    <text x="152" y="200" fill="#7B1FA2" font-size="11" font-weight="600"
+                          text-anchor="middle" font-family="monospace">pick S₁ — covers 3</text>
+                  </g>
+
+                  <!-- ── Step 2: S₁'s elements light up, S₂ becomes the next focus ── -->
+                  <g class="svg-layer" data-min-step="2">
+                    <!-- covered: e1, e2, e3 -->
+                    <circle cx="60"  cy="132" r="19" fill="#6A1B9A" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="60"  y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="103" cy="82"  r="19" fill="#6A1B9A" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="103" y="87"  fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="158" cy="132" r="19" fill="#6A1B9A" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="158" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <!-- S₂ now highlighted as next pick -->
+                    <ellipse cx="213" cy="112" rx="80" ry="74" fill="none"
+                             stroke="#9C27B0" stroke-width="2.5" style="filter:drop-shadow(0 0 8px #9C27B0)"/>
+                    <text x="196" y="46" fill="#AB47BC" font-size="13" font-weight="700"
+                          font-family="monospace" font-style="italic">S₂</text>
+                    <text x="252" y="200" fill="#9C27B0" font-size="11" font-weight="600"
+                          text-anchor="middle" font-family="monospace">pick S₂ — covers 2 more</text>
+                  </g>
+
+                  <!-- ── Step 3: all elements covered ── -->
+                  <g class="svg-layer" data-min-step="3">
+                    <!-- covered: e4, e5, e6 -->
+                    <circle cx="222" cy="80"  r="19" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="222" y="85"  fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="272" cy="132" r="19" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="272" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <circle cx="335" cy="132" r="19" fill="#9C27B0" stroke="#CE93D8" stroke-width="1.5"/>
+                    <text   x="335" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                    <!-- done confirmation -->
+                    <text x="190" y="238" fill="#CE93D8" font-size="13" font-weight="700"
+                          text-anchor="middle" font-family="monospace">All elements covered ✓</text>
+                  </g>
+
+                </svg>
+              </div>
+
+            </div>
+          </div>
+          <div class="learn-page" id="learn-p4"><!-- Page 4 content --></div>
+
+          <!-- ═══════════════ SLIDE 5: Algorithm ═══════════════ -->
+          <div class="learn-page" id="learn-p5">
+            <div style="display:flex;gap:var(--sp-xl);height:100%;align-items:flex-start;">
+
+              <div style="flex:0 0 44%;display:flex;flex-direction:column;gap:var(--sp-xl);padding-top:var(--sp-sm);">
+                <div class="lp-step" data-step="1">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Start with <span class="mono">C ← ∅</span> and <span class="mono">U' ← U</span>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    <span style="font-family:var(--font-mono);color:#9C27B0;">C</span> tracks chosen sets.
+                    <span style="font-family:var(--font-mono);color:#9C27B0;">U'</span> tracks what remains uncovered.
+                  </div>
+                </div>
+                <div class="lp-step" data-step="2">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Each round, pick <span class="mono">S*</span> = argmax <span class="mono">|Sᵢ ∩ U'|</span>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    Among all sets, greedily choose whichever covers the most uncovered elements.
+                  </div>
+                </div>
+                <div class="lp-step" data-step="3">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);color:#CE93D8;">
+                    Add <span class="mono" style="color:#E1BEE7;">S*</span> to C, remove from U'.
+                    Repeat until <span class="mono" style="color:#E1BEE7;">U' = ∅</span>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    Each iteration covers at least one new element, so the algorithm always terminates.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pseudocode block -->
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;height:100%;">
+                <div class="svg-layer" data-min-step="1" style="width:100%;max-width:370px;">
+                  <div style="font-family:var(--font-mono);font-size:0.83rem;line-height:2.1;
+                              background:rgba(74,20,140,0.07);border:1px solid rgba(123,31,162,0.22);
+                              border-radius:var(--radius-lg);padding:var(--sp-lg) var(--sp-xl);">
+                    <div style="color:#4A148C;font-size:0.68rem;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:var(--sp-sm);">Greedy Set Cover</div>
+                    <div><span style="color:#CE93D8;">Input</span><span style="color:var(--text-muted);">  U,  S = {S₁ … Sₘ}</span></div>
+                    <div><span style="color:#CE93D8;">Output</span><span style="color:var(--text-muted);">  C ⊆ S,  ∪C = U</span></div>
+                    <div style="margin:var(--sp-sm) 0;border-top:1px solid rgba(123,31,162,0.18);"></div>
+                    <div><span style="color:#9C27B0;">C </span><span style="color:#6A1B9A;"> ← </span><span style="color:var(--text-muted);">∅</span></div>
+                    <div><span style="color:#9C27B0;">U'</span><span style="color:#6A1B9A;"> ← </span><span style="color:var(--text-muted);">U</span></div>
+                    <div style="margin-top:4px;"><span style="color:#AB47BC;">while </span><span style="color:var(--text-muted);">U' ≠ ∅ :</span></div>
+                    <div style="padding-left:1.4rem;"><span style="color:#CE93D8;">S*</span><span style="color:#6A1B9A;"> ← </span><span style="color:var(--text-muted);">argmax |Sᵢ ∩ U'|</span></div>
+                    <div style="padding-left:1.4rem;"><span style="color:#9C27B0;">C </span><span style="color:#6A1B9A;"> ← </span><span style="color:var(--text-muted);">C ∪ { S* }</span></div>
+                    <div style="padding-left:1.4rem;"><span style="color:#9C27B0;">U'</span><span style="color:#6A1B9A;"> ← </span><span style="color:var(--text-muted);">U' \ S*</span></div>
+                    <div style="margin-top:4px;"><span style="color:#AB47BC;">return </span><span style="color:#CE93D8;">C</span></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ═══════════════ SLIDE 6: Example Execution ═══════════════ -->
+          <div class="learn-page" id="learn-p6">
+            <div style="display:flex;gap:var(--sp-xl);height:100%;align-items:flex-start;">
+
+              <!-- Execution trace -->
+              <div style="flex:0 0 50%;display:flex;flex-direction:column;gap:var(--sp-lg);padding-top:var(--sp-sm);">
+
+                <div class="lp-step" data-step="1">
+                  <div style="font-family:var(--font-mono);font-size:0.72rem;color:#6A1B9A;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">Round 1</div>
+                  <div style="font-size:var(--text-sm);color:var(--text-muted);font-family:var(--font-mono);margin-bottom:4px;">U' = {1, 2, 3, 4, 5, 6}</div>
+                  <div class="lp-wb-line" style="font-size:1.15rem;margin-bottom:4px;">
+                    |S₁ ∩ U'| = <strong>3</strong> <span class="dim">(max)</span>  →  pick <span class="mono">S₁</span>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:#9C27B0;font-family:var(--font-mono);">C = {S₁}    uncovered: 3 left</div>
+                </div>
+
+                <div class="lp-step" data-step="2">
+                  <div style="font-family:var(--font-mono);font-size:0.72rem;color:#6A1B9A;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">Round 2</div>
+                  <div style="font-size:var(--text-sm);color:var(--text-muted);font-family:var(--font-mono);margin-bottom:4px;">U' = {4, 5, 6}</div>
+                  <div class="lp-wb-line" style="font-size:1.15rem;margin-bottom:4px;">
+                    |S₂ ∩ U'| = <strong>2</strong> <span class="dim">(max)</span>  →  pick <span class="mono">S₂</span>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:#9C27B0;font-family:var(--font-mono);">C = {S₁, S₂}    uncovered: 1 left</div>
+                </div>
+
+                <div class="lp-step" data-step="3">
+                  <div style="font-family:var(--font-mono);font-size:0.72rem;color:#6A1B9A;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">Round 3</div>
+                  <div style="font-size:var(--text-sm);color:var(--text-muted);font-family:var(--font-mono);margin-bottom:4px;">U' = {6}</div>
+                  <div class="lp-wb-line" style="font-size:1.15rem;margin-bottom:4px;color:#CE93D8;">
+                    |S₃ ∩ U'| = <strong>1</strong>  →  pick <span class="mono" style="color:#E1BEE7;">S₃</span>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:#7B1FA2;font-family:var(--font-mono);font-weight:700;">C = {S₁, S₂, S₃}    done ✓</div>
+                </div>
+
+              </div>
+
+              <!-- Coverage SVG (same geometry, builds round by round) -->
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;height:100%;">
+                <svg viewBox="0 0 380 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:430px;overflow:visible;">
+
+                  <!-- Base: circles + dim dots (step 1) -->
+                  <g class="svg-layer" data-min-step="1">
+                    <ellipse cx="108" cy="118" rx="70" ry="70" fill="rgba(74,20,140,0.15)" stroke="#6A1B9A" stroke-width="1.5" style="filter:drop-shadow(0 0 6px #7B1FA2)"/>
+                    <ellipse cx="213" cy="112" rx="80" ry="74" fill="rgba(123,31,162,0.08)" stroke="#9C27B0" stroke-width="1.5" opacity="0.45"/>
+                    <ellipse cx="308" cy="126" rx="60" ry="60" fill="rgba(156,39,176,0.06)" stroke="#CE93D8" stroke-width="1.5" opacity="0.30"/>
+                    <text x="50"  y="56"  fill="#7B1FA2" font-size="13" font-weight="700" font-family="monospace" font-style="italic">S₁</text>
+                    <text x="196" y="46"  fill="#9C27B0" font-size="13" font-weight="700" font-family="monospace" font-style="italic" opacity="0.45">S₂</text>
+                    <text x="333" y="74"  fill="#CE93D8" font-size="13" font-weight="700" font-family="monospace" font-style="italic" opacity="0.30">S₃</text>
+                    <!-- dim uncovered dots -->
+                    <circle cx="60"  cy="132" r="18" fill="rgba(74,20,140,0.25)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="60"  y="137" fill="#6A1B9A" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="103" cy="82"  r="18" fill="rgba(74,20,140,0.25)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="103" y="87"  fill="#6A1B9A" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="158" cy="132" r="18" fill="rgba(74,20,140,0.25)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="158" y="137" fill="#6A1B9A" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <circle cx="222" cy="80"  r="18" fill="rgba(74,20,140,0.25)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="222" y="85"  fill="#6A1B9A" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="272" cy="132" r="18" fill="rgba(74,20,140,0.25)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="272" y="137" fill="#6A1B9A" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <circle cx="335" cy="132" r="18" fill="rgba(74,20,140,0.25)" stroke="#4A148C" stroke-width="1.5"/>
+                    <text   x="335" y="137" fill="#6A1B9A" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                    <!-- e1,e2,e3 covered by S₁ -->
+                    <circle cx="60"  cy="132" r="18" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="60"  y="137" fill="#E1BEE7" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="103" cy="82"  r="18" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="103" y="87"  fill="#E1BEE7" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="158" cy="132" r="18" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="158" y="137" fill="#E1BEE7" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <!-- S₂ now active -->
+                    <ellipse cx="213" cy="112" rx="80" ry="74" fill="none" stroke="#9C27B0" stroke-width="2.5" style="filter:drop-shadow(0 0 7px #9C27B0)"/>
+                    <text x="196" y="46" fill="#AB47BC" font-size="13" font-weight="700" font-family="monospace" font-style="italic">S₂</text>
+                  </g>
+
+                  <!-- Round 2: e4,e5 covered -->
+                  <g class="svg-layer" data-min-step="2">
+                    <circle cx="222" cy="80"  r="18" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="222" y="85"  fill="#E1BEE7" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="272" cy="132" r="18" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="272" y="137" fill="#E1BEE7" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <!-- S₃ now active -->
+                    <ellipse cx="308" cy="126" rx="60" ry="60" fill="none" stroke="#CE93D8" stroke-width="2.5" style="filter:drop-shadow(0 0 7px #CE93D8)"/>
+                    <text x="333" y="74" fill="#CE93D8" font-size="13" font-weight="700" font-family="monospace" font-style="italic">S₃</text>
+                  </g>
+
+                  <!-- Round 3: e6 covered, done -->
+                  <g class="svg-layer" data-min-step="3">
+                    <circle cx="335" cy="132" r="18" fill="#9C27B0" stroke="#CE93D8" stroke-width="1.5"/>
+                    <text   x="335" y="137" fill="#E1BEE7" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                    <text x="190" y="232" fill="#9C27B0" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">C = {S₁, S₂, S₃}  ✓</text>
+                  </g>
+
+                </svg>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ═══════════════ SLIDE 7: Optimal vs Greedy ═══════════════ -->
+          <div class="learn-page" id="learn-p7">
+            <div style="display:flex;gap:var(--sp-xl);height:100%;align-items:flex-start;">
+
+              <div style="flex:0 0 44%;display:flex;flex-direction:column;gap:var(--sp-xl);padding-top:var(--sp-sm);">
+                <div class="lp-step" data-step="1">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Greedy does <strong>not</strong> always give the minimum number of sets
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    Because each pick is locally optimal, some choices can block a globally better solution.
+                    Greedy may use more sets than strictly needed.
+                  </div>
+                </div>
+                <div class="lp-step" data-step="2">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);color:#CE93D8;">
+                    But it is never <strong>far</strong> from optimal
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    The gap is bounded by the harmonic number H(k). Greedy is
+                    provably close — this is the approximation guarantee.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Comparison SVG -->
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;height:100%;">
+                <svg viewBox="0 0 340 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px;overflow:visible;">
+
+                  <!-- Separator -->
+                  <line x1="170" y1="10" x2="170" y2="195" stroke="rgba(123,31,162,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+
+                  <!-- OPTIMAL panel (left) -->
+                  <g class="svg-layer" data-min-step="1">
+                    <text x="75" y="20" fill="#6A1B9A" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace" text-transform="uppercase">Optimal</text>
+                    <!-- 2 circles, 3 elements each -->
+                    <ellipse cx="55" cy="95" rx="42" ry="42" fill="rgba(74,20,140,0.18)" stroke="#7B1FA2" stroke-width="1.8"/>
+                    <ellipse cx="130" cy="95" rx="42" ry="42" fill="rgba(123,31,162,0.12)" stroke="#9C27B0" stroke-width="1.8"/>
+                    <!-- dots: left cluster -->
+                    <circle cx="30"  cy="85"  r="15" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="30"  y="90"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="55"  cy="115" r="15" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="55"  y="120" fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="78"  cy="82"  r="15" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="78"  y="87"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <!-- dots: right cluster -->
+                    <circle cx="108" cy="82"  r="15" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="108" y="87"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="130" cy="115" r="15" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="130" y="120" fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <circle cx="153" cy="82"  r="15" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="153" y="87"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                    <text x="75" y="165" fill="#7B1FA2" font-size="13" font-weight="800" text-anchor="middle" font-family="monospace">2 sets</text>
+                    <text x="75" y="180" fill="#6A1B9A" font-size="10" text-anchor="middle" font-family="monospace">minimum possible</text>
+                  </g>
+
+                  <!-- GREEDY panel (right) -->
+                  <g class="svg-layer" data-min-step="2">
+                    <text x="258" y="20" fill="#6A1B9A" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace" text-transform="uppercase">Greedy</text>
+                    <!-- 3 circles, 2 elements each -->
+                    <ellipse cx="210" cy="82"  rx="28" ry="28" fill="rgba(74,20,140,0.18)"  stroke="#7B1FA2" stroke-width="1.5"/>
+                    <ellipse cx="262" cy="105" rx="28" ry="28" fill="rgba(106,27,154,0.14)" stroke="#8E24AA" stroke-width="1.5"/>
+                    <ellipse cx="318" cy="82"  rx="28" ry="28" fill="rgba(156,39,176,0.12)" stroke="#CE93D8" stroke-width="1.5"/>
+                    <!-- dots -->
+                    <circle cx="196" cy="70"  r="15" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="196" y="75"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="222" cy="95"  r="15" fill="#5E1098" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="222" y="100" fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="248" cy="90"  r="15" fill="#6A1B9A" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="248" y="95"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <circle cx="277" cy="118" r="15" fill="#6A1B9A" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="277" y="123" fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="304" cy="70"  r="15" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="304" y="75"  fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <circle cx="330" cy="95"  r="15" fill="#7B1FA2" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="330" y="100" fill="#E1BEE7" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                    <text x="262" y="165" fill="#9C27B0" font-size="13" font-weight="800" text-anchor="middle" font-family="monospace">3 sets</text>
+                    <text x="262" y="180" fill="#6A1B9A" font-size="10" text-anchor="middle" font-family="monospace">locally optimal picks</text>
+                  </g>
+
+                </svg>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ═══════════════ SLIDE 8: Approximation Guarantee ═══════════════ -->
+          <div class="learn-page" id="learn-p8">
+            <div style="display:flex;gap:var(--sp-xl);height:100%;align-items:center;justify-content:center;flex-direction:column;padding-top:var(--sp-sm);">
+
+              <div class="lp-step" data-step="1" style="text-align:center;width:100%;">
+                <div class="lp-wb-line" style="margin-bottom:var(--sp-md);text-align:center;">
+                  The <strong>harmonic number</strong> <span class="mono">H(k)</span>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:1.6rem;font-weight:700;color:#9C27B0;
+                            letter-spacing:-0.5px;margin-bottom:var(--sp-md);text-align:center;">
+                  H(k) = 1 + <sup>1</sup>/<sub>2</sub> + <sup>1</sup>/<sub>3</sub> + &hellip; + <sup>1</sup>/<sub>k</sub>
+                </div>
+                <div style="display:flex;justify-content:center;gap:var(--sp-xl);flex-wrap:wrap;">
+                  <div style="font-family:var(--font-mono);font-size:var(--text-sm);color:var(--text-secondary);line-height:2;">
+                    <div><span style="color:#7B1FA2;">H(1)</span> = 1.000</div>
+                    <div><span style="color:#7B1FA2;">H(2)</span> = 1.500</div>
+                    <div><span style="color:#7B1FA2;">H(3)</span> = 1.833</div>
+                  </div>
+                  <div style="font-family:var(--font-mono);font-size:var(--text-sm);color:var(--text-secondary);line-height:2;">
+                    <div><span style="color:#9C27B0;">H(5)</span>  = 2.283</div>
+                    <div><span style="color:#9C27B0;">H(10)</span> = 2.929</div>
+                    <div><span style="color:#9C27B0;">H(50)</span> = 4.499</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lp-step" data-step="2" style="text-align:center;width:100%;margin-top:var(--sp-lg);">
+                <div class="lp-wb-line" style="margin-bottom:var(--sp-md);text-align:center;color:#CE93D8;">
+                  Greedy is an <strong>H(k)-approximation</strong>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:1.25rem;font-weight:700;
+                            color:#AB47BC;text-align:center;margin-bottom:var(--sp-sm);">
+                  |Greedy Cover| ≤ H(k) · |OPT|
+                </div>
+                <div style="font-size:var(--text-sm);color:var(--text-secondary);text-align:center;line-height:1.8;">
+                  where k = size of the largest set in S
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ═══════════════ SLIDE 9: Key Insight ═══════════════ -->
+          <div class="learn-page" id="learn-p9">
+            <div style="display:flex;gap:var(--sp-xl);height:100%;align-items:center;justify-content:center;flex-direction:column;padding-top:var(--sp-sm);">
+
+              <div class="lp-step" data-step="1" style="text-align:center;width:100%;max-width:600px;">
+                <div class="lp-wb-line" style="margin-bottom:var(--sp-md);text-align:center;">
+                  Greedy is <strong>simple</strong> but near-optimal in practice
+                </div>
+                <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;text-align:center;">
+                  The algorithm runs in polynomial time — just scan all sets each round
+                  and pick the best. Time complexity:
+                  <span style="font-family:var(--font-mono);color:#9C27B0;"> O(n · m)</span>
+                  where n = |U|, m = |S|.
+                </div>
+              </div>
+
+              <div class="lp-step" data-step="2" style="text-align:center;width:100%;max-width:600px;margin-top:var(--sp-lg);">
+                <div class="lp-wb-line" style="margin-bottom:var(--sp-md);text-align:center;color:#CE93D8;">
+                  Performance is <strong>logarithmically bounded</strong>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:1.4rem;font-weight:700;
+                            color:#9C27B0;text-align:center;margin-bottom:var(--sp-md);">
+                  H(k) ≈ ln(k) + 0.5772&hellip;
+                </div>
+                <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;text-align:center;">
+                  For k = 100 sets, H(100) ≈ 5.19 — greedy is at most ~5× from optimal.
+                  Often much better in practice.
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ═══════════════ SLIDE 10: Conclusion ═══════════════ -->
+          <div class="learn-page" id="learn-p10">
+            <div style="display:flex;gap:var(--sp-xl);height:100%;align-items:flex-start;">
+
+              <div style="flex:0 0 50%;display:flex;flex-direction:column;gap:var(--sp-xl);padding-top:var(--sp-sm);">
+                <div class="lp-step" data-step="1">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);">
+                    Set Cover is <strong>NP-hard</strong>
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    No polynomial-time algorithm is known to find the minimum cover exactly.
+                    With m sets, brute force checks
+                    <span style="font-family:var(--font-mono);color:#9C27B0;">2ᵐ</span>
+                    sub-collections — infeasible for large inputs.
+                  </div>
+                </div>
+                <div class="lp-step" data-step="2">
+                  <div class="lp-wb-line" style="margin-bottom:var(--sp-sm);color:#CE93D8;">
+                    Greedy provides an <strong style="color:#E1BEE7;">efficient</strong> approximation solution
+                  </div>
+                  <div style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.8;">
+                    Always choose the set covering the most uncovered elements.
+                    Guaranteed to be within a factor of
+                    <span style="font-family:var(--font-mono);color:#9C27B0;">H(k) ≈ ln(k)</span>
+                    of optimal — fast, simple, and provably near-optimal.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Callback: original diagram, lightly faded -->
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;height:100%;">
+                <div class="svg-layer" data-min-step="1" style="width:100%;max-width:420px;">
+                  <svg viewBox="0 0 380 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;opacity:0.22;overflow:visible;">
+                    <ellipse cx="108" cy="118" rx="70" ry="70" fill="rgba(74,20,140,0.18)" stroke="#6A1B9A" stroke-width="1.8"/>
+                    <ellipse cx="213" cy="112" rx="80" ry="74" fill="rgba(123,31,162,0.13)" stroke="#9C27B0" stroke-width="1.8"/>
+                    <ellipse cx="308" cy="126" rx="60" ry="60" fill="rgba(156,39,176,0.10)" stroke="#CE93D8" stroke-width="1.8"/>
+                    <circle cx="60"  cy="132" r="19" fill="rgba(74,20,140,0.40)" stroke="#7B1FA2" stroke-width="1.5"/>
+                    <text   x="60"  y="137" fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">1</text>
+                    <circle cx="103" cy="82"  r="19" fill="rgba(74,20,140,0.40)" stroke="#7B1FA2" stroke-width="1.5"/>
+                    <text   x="103" y="87"  fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">2</text>
+                    <circle cx="158" cy="132" r="19" fill="rgba(106,27,154,0.50)" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="158" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">3</text>
+                    <circle cx="222" cy="80"  r="19" fill="rgba(74,20,140,0.40)" stroke="#9C27B0" stroke-width="1.5"/>
+                    <text   x="222" y="85"  fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">4</text>
+                    <circle cx="272" cy="132" r="19" fill="rgba(123,31,162,0.50)" stroke="#AB47BC" stroke-width="1.5"/>
+                    <text   x="272" y="137" fill="#E1BEE7" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">5</text>
+                    <circle cx="335" cy="132" r="19" fill="rgba(74,20,140,0.40)" stroke="#CE93D8" stroke-width="1.5"/>
+                    <text   x="335" y="137" fill="#CE93D8" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">6</text>
+                  </svg>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /#learn-canvas -->
+
+      <!-- Floating pill controls -->
+      <div class="viz-controls-pill pinned" id="learn-pill">
+        <button class="pill-btn" id="learn-prev" disabled>
+          <span class="pill-btn-icon">←</span> Prev
+        </button>
+        <div class="pill-divider"></div>
+        <span class="pill-step-counter" id="learn-page-ind">1 / 4</span>
+        <div class="pill-divider"></div>
+        <button class="pill-btn" id="learn-play"><span class="pill-btn-icon">▶</span> Play</button>
+        <button class="pill-btn" id="learn-pause" disabled><span class="pill-btn-icon">⏸</span></button>
+        <div class="pill-divider"></div>
+        <button class="pill-btn pill-btn--primary" id="learn-next">Next <span class="pill-btn-icon">→</span></button>
+        <div class="pill-divider"></div>
+        <button class="pill-btn" id="learn-switch" style="opacity:0.65;">⚙ Solver</button>
+      </div>
+
+    </section>
+  </div><!-- /#learning-view -->
+
+  <!-- SOLVING VIEW -->
+  <div id="solving-view" style="display:none;">
+
+  <!-- VISUALIZATION HERO -->
+  <section class="viz-hero" id="p5-vizHero">
+    <div class="viz-hero__title-block">
+      <span class="viz-hero__badge">CLO-5</span>
+      <h1 class="viz-hero__title">Greedy Set Cover</h1>
+      <span class="viz-hero__subtitle">Greedy Approximation · H(k)-Ratio · NP-Hard</span>
+    </div>
+
+    <div class="viz-hero__status">
+      <div class="status-badge" id="p5-statusBadge">
+        <span class="status-dot"></span>
+        <span id="p5-statusText">Idle</span>
+      </div>
+    </div>
+
+    <div class="viz-canvas" id="p5-vizCanvas">
+      <div class="viz-idle-hint" id="p5-vizIdleHint">
+        <div class="viz-idle-hint__icon">⊆</div>
+        <div class="viz-idle-hint__text">Press Build to begin</div>
+      </div>
+
+      <!-- Main viz layout (hidden until built) -->
+      <div id="p5-mainViz" class="p5-viz-layout" style="display:none;">
+
+        <div class="p5-universe-area">
+          <div class="p5-area-label">Universe U</div>
+          <div class="p5-chips" id="p5-chips"></div>
+        </div>
+
+        <div class="p5-progress-area">
+          <div class="p5-progress-label">
+            <span>Coverage</span>
+            <span id="p5-covPct">0%</span>
+          </div>
+          <div class="p5-progress-bg">
+            <div class="p5-progress-fill" id="p5-covFill"></div>
+          </div>
+        </div>
+
+        <div class="p5-sets-area">
+          <div class="p5-area-label">Available Sets</div>
+          <div class="p5-sets-row" id="p5-setsRow"></div>
+        </div>
+
+      </div>
+
+      <!-- Approx guarantee box -->
+      <div class="p5-approx-box" id="p5-approxBox" style="display:none;">
+        <div class="p5-approx-title">Approximation Bound</div>
+        <div class="p5-approx-row">
+          <span>Greedy |C|</span>
+          <span class="p5-approx-val" id="p5-apxGreedy">—</span>
+        </div>
+        <div class="p5-approx-row">
+          <span>OPT ≥</span>
+          <span class="p5-approx-val" id="p5-apxOPT">—</span>
+        </div>
+        <div class="p5-approx-row">
+          <span>H(max|Sᵢ|)</span>
+          <span class="p5-approx-val" id="p5-apxH">—</span>
+        </div>
+        <div class="p5-approx-row">
+          <span>OPT · H(k) ≤</span>
+          <span class="p5-approx-val" id="p5-apxBound">—</span>
+        </div>
+        <div class="p5-approx-row">
+          <span>Within bound?</span>
+          <span class="p5-approx-val good" id="p5-apxCheck">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating pill controls -->
+    <div class="viz-controls-pill" id="p5-controlsPill">
+
+      <button class="pill-btn pill-btn--primary" id="p5-btnBuild">
+        <span class="pill-btn-icon">⚙</span> Build
+      </button>
+
+      <div class="pill-divider"></div>
+
+      <button class="pill-btn" id="p5-btnBack" disabled>
+        <span class="pill-btn-icon">←</span>
+      </button>
+      <button class="pill-btn" id="p5-btnStep" disabled>
+        <span class="pill-btn-icon">→</span> Step
+      </button>
+      <button class="pill-btn" id="p5-btnPlay" disabled>
+        <span class="pill-btn-icon">▶</span> Play
+      </button>
+      <button class="pill-btn" id="p5-btnPause" disabled>
+        <span class="pill-btn-icon">⏸</span>
+      </button>
+      <button class="pill-btn" id="p5-btnReset" disabled>
+        <span class="pill-btn-icon">↺</span>
+      </button>
+
+      <div class="pill-divider"></div>
+
+      <div class="pill-speed-row">
+        <input type="range" class="pill-slider" id="p5-speedSlider"
+               min="0.25" max="4" step="0.25" value="1" />
+        <span class="pill-speed-label" id="p5-speedValue">1×</span>
+      </div>
+
+      <div class="pill-divider"></div>
+
+      <span class="pill-step-counter" id="p5-stepCounter">— / —</span>
+
+      <div class="pill-divider"></div>
+
+      <div class="pill-legend">
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:var(--accent);"></div>
+          Candidate
+        </div>
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:#4CAF50;"></div>
+          Chosen
+        </div>
+        <div class="pill-legend-item">
+          <div class="pill-legend-dot" style="background:var(--text-muted);"></div>
+          Uncovered
+        </div>
+      </div>
+
+    </div>
+
+    <div class="scroll-hint">
+      <span>scroll</span>
+      <span>↓</span>
+    </div>
+  </section>
+
+  <div class="below-fold">
+
+    <!-- Pseudocode + Step explanation -->
+    <div class="info-row">
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Pseudocode</span></div>
+        <div class="panel-body">
+          <div class="pseudocode-block">
+            <div class="code-line" id="p5-pline-1" data-tip="Takes universe U and collection S of subsets">
+              <span class="line-num">1</span>
+              <span><b>function</b> GREEDY-SET-COVER(U, S)</span>
+            </div>
+            <div class="code-line" id="p5-pline-2" data-tip="C holds the chosen sets; R tracks uncovered elements">
+              <span class="line-num">2</span>
+              <span>&nbsp;&nbsp;C ← ∅ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// chosen sets</span>
+            </div>
+            <div class="code-line" id="p5-pline-3" data-tip="Initially every element is uncovered">
+              <span class="line-num">3</span>
+              <span>&nbsp;&nbsp;R ← U &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// remaining uncovered</span>
+            </div>
+            <div class="code-line" id="p5-pline-4" data-tip="Keep going until all elements are covered">
+              <span class="line-num">4</span>
+              <span>&nbsp;&nbsp;<b>while</b> R ≠ ∅ <b>do</b></span>
+            </div>
+            <div class="code-line" id="p5-pline-5" data-tip="Pick the set that covers the most still-uncovered elements">
+              <span class="line-num">5</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;S* ← argmax |Sᵢ ∩ R| &nbsp;&nbsp;// greedy best</span>
+            </div>
+            <div class="code-line" id="p5-pline-6" data-tip="Add the chosen set to the solution">
+              <span class="line-num">6</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;C ← C ∪ {S*}</span>
+            </div>
+            <div class="code-line" id="p5-pline-7" data-tip="Remove newly covered elements from the remaining set">
+              <span class="line-num">7</span>
+              <span>&nbsp;&nbsp;&nbsp;&nbsp;R ← R \ S*</span>
+            </div>
+            <div class="code-line" id="p5-pline-8" data-tip="Return the collection of chosen sets">
+              <span class="line-num">8</span>
+              <span>&nbsp;&nbsp;<b>return</b> C</span>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--border);margin:var(--sp-sm) 0;"></div>
+          <div style="font-size:var(--text-xs);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:var(--sp-xs);">Approximation Guarantee</div>
+          <div class="pseudocode-block">
+            <div class="code-line" data-tip="The greedy solution is within the harmonic bound of optimal">
+              <span class="line-num">1</span>
+              <span>|C_greedy| ≤ H(max|Sᵢ|) · OPT</span>
+            </div>
+            <div class="code-line" data-tip="Harmonic number H(k) grows as ln(k)">
+              <span class="line-num">2</span>
+              <span>H(k) = 1 + 1/2 + 1/3 + … + 1/k ≈ ln k + 0.577</span>
+            </div>
+            <div class="code-line" data-tip="Worst case inapproximability unless P=NP">
+              <span class="line-num">3</span>
+              <span>Inapprox: no (1−ε)·ln|U|-approx unless P=NP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Step Explanation</span></div>
+        <div class="panel-body">
+          <div class="explanation-box" id="p5-explanationBox">
+            Choose a preset or enter a custom instance in <strong>Input &amp; Presets</strong> below,
+            then press <strong>Build</strong> in the controls above to start.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Input & Presets -->
+    <div class="collapsible open" id="p5-sectionInput">
+      <div class="collapsible-header" onclick="toggleSection('p5-sectionInput')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Input &amp; Presets</span>
+          <span class="collapsible-hint">Choose a preset or enter a custom universe and sets</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="presets-row">
+            <span class="presets-label">Presets</span>
+            <button class="preset-btn" onclick="Part5.loadPreset('classic')">Classic (12 elem)</button>
+            <button class="preset-btn" onclick="Part5.loadPreset('small')">Small (8 elem)</button>
+            <button class="preset-btn" onclick="Part5.loadPreset('tight')">Tight Cover</button>
+            <button class="preset-btn" onclick="Part5.loadPreset('overlap')">Heavy Overlap</button>
+          </div>
+          <div class="input-grid input-grid--1col" style="margin-top:var(--sp-md);">
+            <div class="input-group">
+              <label class="input-label" for="p5-customInput">Custom (JSON) — { "U": [...], "S": [[...], ...] }</label>
+              <textarea class="input-field" id="p5-customInput" rows="4">{
+  "U": [1,2,3,4,5,6],
+  "S": [[1,2,3],[2,4],[3,4,5],[5,6],[1,6]]
+}</textarea>
+            </div>
+          </div>
+          <div class="presets-row">
+            <button class="preset-btn" onclick="Part5.loadCustom()">▶ Load Custom</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics & History -->
+    <div class="collapsible" id="p5-sectionStats">
+      <div class="collapsible-header" onclick="toggleSection('p5-sectionStats')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Statistics &amp; History</span>
+          <span class="collapsible-hint">Coverage progress, OPT bound, and H(k) ratio</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-value p5-stat-accent" id="p5-statChosen">—</span>
+              <span class="stat-label">Sets chosen</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value p5-stat-accent" id="p5-statCovered">—</span>
+              <span class="stat-label">Elements covered</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="p5-statUncov">—</span>
+              <span class="stat-label">Uncovered remaining</span>
+            </div>
+          </div>
+          <div class="history-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Round</th><th>Set Chosen</th><th>New Coverage</th><th>Remaining</th>
+                </tr>
+              </thead>
+              <tbody id="p5-historyBody">
+                <tr>
+                  <td colspan="4" style="text-align:center;color:var(--text-muted);font-family:var(--font-ui);">
+                    No steps yet
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Educational Overview -->
+    <div class="collapsible" id="p5-sectionEdu">
+      <div class="collapsible-header" onclick="toggleSection('p5-sectionEdu')">
+        <div class="collapsible-header-left">
+          <span class="collapsible-title">Educational Overview</span>
+          <span class="collapsible-hint">NP-hardness, approximation ratio, and worked examples</span>
+        </div>
+        <span class="collapsible-chevron">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-inner">
+          <div class="edu-content">
+            <p class="edu-p">
+              <strong>Set Cover</strong> is an NP-hard optimization problem: given a universe U and
+              a collection S of subsets, find the minimum number of subsets whose union equals U.
+              The greedy algorithm provides a tractable approximation.
+            </p>
+            <div class="key-concept">
+              <div class="key-concept-title">NP-Hardness</div>
+              <div class="key-concept-body">
+                No polynomial-time algorithm is known that finds the optimal solution (unless P=NP).
+                Set Cover is reducible from Vertex Cover and 3-SAT, placing it firmly in NP-Complete.
+                This motivates the need for approximation algorithms.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Greedy Approximation Ratio</div>
+              <div class="key-concept-body">
+                The greedy algorithm achieves: <span class="mono">|C_greedy| ≤ H(max|Sᵢ|) · OPT</span><br/>
+                where <span class="mono">H(k) = 1 + 1/2 + … + 1/k ≈ ln(k) + 0.577</span> (harmonic number).<br/><br/>
+                <strong>Proof sketch:</strong> When the i-th element is covered, its "cost" is at most
+                1/|S*∩R| ≤ 1/(|U|−i+1). Summing over all |U| elements gives H(|U|) · OPT.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Inapproximability</div>
+              <div class="key-concept-body">
+                Dinur &amp; Steurer (2014) proved that unless P=NP, no polynomial-time algorithm
+                can achieve an approximation ratio better than
+                <span class="mono">(1−ε) · ln|U|</span> for any ε &gt; 0.
+                The greedy algorithm is therefore essentially optimal among efficient algorithms.
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Worked Example — Classic 12-Element</div>
+              <div class="key-concept-body">
+                U = {1…12}, S = { {1,2,3,4,5}, {1,4,7,10}, {2,5,8,11}, {3,6,9,12}, {4,5,6,7,8}, {9,10,11,12} }<br/><br/>
+                <strong>Round 1:</strong> S1={1,2,3,4,5} covers 5 new → choose S1. R = {6…12}.<br/>
+                <strong>Round 2:</strong> S6={9,10,11,12} covers 4 new → choose S6. R = {6,7,8}.<br/>
+                <strong>Round 3:</strong> S5={4,5,6,7,8} covers 3 new (6,7,8) → choose S5. R = ∅.<br/><br/>
+                Greedy: <strong>3 sets</strong>. OPT ≥ ⌈12/5⌉ = 3. Ratio = 1 (optimal here).<br/>
+                H(5) = 1+0.5+0.333+0.25+0.2 = 2.283. Bound: 3 ≤ 2.283 · 3 ≈ 6.85. ✓
+              </div>
+            </div>
+            <div class="key-concept">
+              <div class="key-concept-title">Sequential vs Greedy — Side by Side</div>
+              <div class="key-concept-body">
+                <table style="width:100%;border-collapse:collapse;font-size:var(--text-xs);">
+                  <thead><tr style="opacity:0.5;">
+                    <th style="text-align:left;padding:2px 6px;">Method</th>
+                    <th style="text-align:center;padding:2px 6px;">Quality</th>
+                    <th style="text-align:center;padding:2px 6px;">Time</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td style="padding:3px 6px;opacity:0.7;">Brute force (OPT)</td><td style="text-align:center;padding:3px 6px;"><span class="mono">Optimal</span></td><td style="text-align:center;padding:3px 6px;"><span class="mono">O(2ⁿ · m)</span></td></tr>
+                    <tr><td style="padding:3px 6px;opacity:0.7;">Greedy</td><td style="text-align:center;padding:3px 6px;"><span class="mono" style="color:var(--accent);">H(k) · OPT</span></td><td style="text-align:center;padding:3px 6px;"><span class="mono" style="color:var(--accent);">O(|U| · |S|)</span></td></tr>
+                    <tr><td style="padding:3px 6px;opacity:0.7;">LP relaxation</td><td style="text-align:center;padding:3px 6px;"><span class="mono">ln|U| · OPT</span></td><td style="text-align:center;padding:3px 6px;"><span class="mono">Poly</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.below-fold -->
+
+  </div><!-- /#solving-view -->
+
+  <script>
+
+    // ═══════════════════════════════════════════════
+    // THEME CONTROLLER
+    // ═══════════════════════════════════════════════
+    const ThemeController = (() => {
+      const KEY = 'cud-theme';
+      function apply(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.getElementById('themeIcon').textContent  = theme === 'dark' ? '🌙' : '☀️';
+        document.getElementById('themeLabel').textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        try { localStorage.setItem(KEY, theme); } catch (_) {}
+      }
+      function init() {
+        let saved = 'dark';
+        try { saved = localStorage.getItem(KEY) || 'dark'; } catch (_) {}
+        apply(saved);
+        document.getElementById('themeToggle').addEventListener('click', () => {
+          apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+        });
+      }
+      return { init };
+    })();
+
+    // ═══════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════
+    function toggleSection(id) {
+      document.getElementById(id).classList.toggle('open');
+    }
+
+    function makePillController(heroId, pillId) {
+      const hero = document.getElementById(heroId);
+      const pill = document.getElementById(pillId);
+      let timer = null;
+      function show() {
+        pill.style.opacity = '1';
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!pill.classList.contains('pinned')) pill.style.opacity = '';
+        }, 3000);
+      }
+      hero.addEventListener('mousemove', show);
+      pill.addEventListener('mouseenter', () => { clearTimeout(timer); pill.style.opacity = '1'; });
+      pill.addEventListener('mouseleave', show);
+    }
+
+    function harmonic(k) {
+      let h = 0;
+      for (let i = 1; i <= k; i++) h += 1/i;
+      return h;
+    }
+
+    // ═══════════════════════════════════════════════
+    // PART 5 — GREEDY SET COVER
+    // ═══════════════════════════════════════════════
+    const Part5 = (() => {
+
+      const SET_COLORS = [
+        '#7B1FA2','#0288D1','#E65100','#2E7D32','#C62828',
+        '#00838F','#AD1457','#558B2F','#1565C0','#6D4C41',
+        '#37474F','#F57F17'
+      ];
+
+      const PRESETS = {
+        classic: {
+          U: [1,2,3,4,5,6,7,8,9,10,11,12],
+          S: [[1,2,3,4,5],[1,4,7,10],[2,5,8,11],[3,6,9,12],[4,5,6,7,8],[9,10,11,12]]
+        },
+        small: {
+          U: [1,2,3,4,5,6,7,8],
+          S: [[1,2,3,4],[3,4,5],[5,6],[6,7,8],[1,5,8]]
+        },
+        tight: {
+          U: ['a','b','c','d','e','f'],
+          S: [['a','b','c'],['b','c','d'],['c','d','e'],['d','e','f'],['a','d']]
+        },
+        overlap: {
+          U: [1,2,3,4,5,6,7,8,9,10],
+          S: [[1,2,3,4,5,6],[2,3,4,5,6,7],[4,5,6,7,8],[6,7,8,9,10],[1,8,9,10],[3,7,9]]
+        }
+      };
+
+      let universe = [];
+      let sets     = [];   // [{elems, color, name}]
+      let steps    = [];
+      let stepIdx  = -1;
+      let playTimer = null;
+      let speed    = 1;
+      let historyLog = [];
+
+      // ── build steps ──
+      function buildSteps() {
+        steps = [];
+        if (!universe.length || !sets.length) return;
+
+        const maxS   = Math.max(...sets.map(s => s.elems.length));
+        const optLow = Math.ceil(universe.length / maxS);
+
+        const remaining   = new Set(universe);
+        const chosenFlags = new Array(sets.length).fill(false);
+        const chosen      = [];
+
+        // Init step
+        steps.push({
+          type: 'init', remaining: new Set(remaining),
+          chosenFlags: [...chosenFlags], chosen: [...chosen],
+          candidateIdx: -1, newlyCovered: new Set(),
+          coverCounts: null, optLow,
+          expl: 'Initialize: <strong>|U| = '+universe.length+'</strong> elements, <strong>'+sets.length+' sets</strong>. R = U.',
+          logRow: null, pseudoLine: 3
+        });
+
+        let round = 0;
+        while (remaining.size > 0) {
+          round++;
+          let bestIdx = -1, bestCount = -1, bestNew = new Set();
+          const counts = sets.map((s, i) => {
+            if (chosenFlags[i]) return 0;
+            return s.elems.filter(e => remaining.has(e)).length;
+          });
+
+          for (let i = 0; i < sets.length; i++) {
+            if (!chosenFlags[i] && counts[i] > bestCount) {
+              bestCount = counts[i];
+              bestIdx   = i;
+              bestNew   = new Set(sets[i].elems.filter(e => remaining.has(e)));
+            }
+          }
+          if (bestIdx === -1 || bestCount === 0) break;
+
+          // Evaluate step
+          steps.push({
+            type: 'evaluate', remaining: new Set(remaining),
+            chosenFlags: [...chosenFlags], chosen: [...chosen],
+            candidateIdx: bestIdx, newlyCovered: new Set(),
+            coverCounts: [...counts], optLow,
+            expl: 'Round '+round+': Best set is <strong>S'+(bestIdx+1)+'</strong> covering <strong>'+bestCount+' new element(s)</strong>.',
+            logRow: null, pseudoLine: 5
+          });
+
+          // Pick step
+          chosenFlags[bestIdx] = true;
+          chosen.push(bestIdx);
+          const newElems = new Set(sets[bestIdx].elems.filter(e => remaining.has(e)));
+          for (const e of newElems) remaining.delete(e);
+
+          steps.push({
+            type: 'pick', remaining: new Set(remaining),
+            chosenFlags: [...chosenFlags], chosen: [...chosen],
+            candidateIdx: bestIdx, newlyCovered: newElems,
+            coverCounts: null, optLow,
+            expl: 'Pick <strong>S'+(bestIdx+1)+'</strong>: covers '+newElems.size+' new element(s). <strong>'+remaining.size+' uncovered</strong> remain.',
+            logRow: {round, setName:'S'+(bestIdx+1), newCov:newElems.size, remaining:remaining.size},
+            pseudoLine: 6
+          });
+        }
+
+        // Done
+        steps.push({
+          type: 'done', remaining: new Set(remaining),
+          chosenFlags: [...chosenFlags], chosen: [...chosen],
+          candidateIdx: -1, newlyCovered: new Set(),
+          coverCounts: null, optLow,
+          expl: 'Done! Greedy chose <strong>'+chosen.length+' set(s)</strong> to cover all '+universe.length+' elements.',
+          logRow: null, pseudoLine: 8
+        });
+      }
+
+      // ── apply step ──
+      function applyStep(idx) {
+        if (idx < 0 || idx >= steps.length) return;
+        const s = steps[idx];
+
+        // explanation
+        document.getElementById('p5-explanationBox').innerHTML = s.expl || '';
+
+        // pseudocode
+        document.querySelectorAll('[id^="p5-pline-"]').forEach(el => el.classList.remove('active'));
+        if (s.pseudoLine > 0) {
+          const el = document.getElementById('p5-pline-' + s.pseudoLine);
+          if (el) el.classList.add('active');
+        }
+
+        // status badge
+        const badge = document.getElementById('p5-statusBadge');
+        const txt   = document.getElementById('p5-statusText');
+        if (s.type === 'done') { badge.className='status-badge done';    txt.textContent='Done';     }
+        else if (s.type==='init') { badge.className='status-badge ready'; txt.textContent='Ready'; }
+        else                  { badge.className='status-badge playing'; txt.textContent='Running'; }
+
+        // step counter
+        document.getElementById('p5-stepCounter').textContent = (idx+1)+' / '+steps.length;
+
+        // stats
+        const covered = universe.length - s.remaining.size;
+        document.getElementById('p5-statChosen').textContent  = s.chosen.length;
+        document.getElementById('p5-statCovered').textContent = covered;
+        document.getElementById('p5-statUncov').textContent   = s.remaining.size;
+
+        // coverage bar
+        const pct = universe.length > 0 ? Math.round(100 * covered / universe.length) : 0;
+        document.getElementById('p5-covFill').style.width = pct + '%';
+        document.getElementById('p5-covPct').textContent  = pct + '%';
+
+        // approx box
+        const maxS  = Math.max(...sets.map(s => s.elems.length));
+        const hk    = harmonic(maxS);
+        const bound = Math.ceil(s.optLow * hk);
+        const within= s.chosen.length <= bound;
+        document.getElementById('p5-apxGreedy').textContent = s.chosen.length;
+        document.getElementById('p5-apxOPT').textContent    = '≥ '+s.optLow;
+        document.getElementById('p5-apxH').textContent      = hk.toFixed(3);
+        document.getElementById('p5-apxBound').textContent  = bound;
+        const chk = document.getElementById('p5-apxCheck');
+        chk.textContent  = within ? 'Yes ✓' : 'No ✗';
+        chk.className    = 'p5-approx-val ' + (within ? 'good' : 'warn');
+
+        // render chips
+        renderChips(s);
+
+        // render sets
+        renderSets(s);
+
+        // history row
+        if (s.logRow) addHistoryRow(s.logRow);
+      }
+
+      // ── render chips ──
+      function renderChips(s) {
+        const container = document.getElementById('p5-chips');
+        container.innerHTML = '';
+
+        const coverMap = {};
+        for (const idx of s.chosen) {
+          for (const e of sets[idx].elems) {
+            if (!(e in coverMap)) coverMap[e] = idx;
+          }
+        }
+
+        for (const elem of universe) {
+          const div = document.createElement('div');
+          div.className = 'p5-chip';
+          div.textContent = elem;
+
+          const covIdx = coverMap[elem];
+          const isUncov = s.remaining.has(elem);
+
+          if (!isUncov && covIdx !== undefined) {
+            const color = sets[covIdx].color;
+            div.style.background   = color + '28';
+            div.style.borderColor  = color;
+            div.style.color        = color;
+            div.classList.add('covered');
+            if (s.newlyCovered && s.newlyCovered.has(elem)) {
+              div.style.boxShadow = '0 0 12px ' + color + '88';
+            }
+            const tag = document.createElement('div');
+            tag.className   = 'p5-chip-tag';
+            tag.textContent = 'S'+(covIdx+1);
+            tag.style.color = color;
+            div.appendChild(tag);
+          } else {
+            div.classList.add('uncovered');
+          }
+          container.appendChild(div);
+        }
+      }
+
+      // ── render sets ──
+      function renderSets(s) {
+        const row = document.getElementById('p5-setsRow');
+        row.innerHTML = '';
+
+        for (let i = 0; i < sets.length; i++) {
+          const set     = sets[i];
+          const isChosen = s.chosenFlags[i];
+          const isCand   = s.candidateIdx === i;
+          const newCov   = s.coverCounts ? s.coverCounts[i] : null;
+
+          const card = document.createElement('div');
+          card.className = 'p5-set-card';
+          if (isChosen) { card.classList.add('chosen');    card.style.borderColor = set.color; card.style.background = set.color+'18'; }
+          if (isCand)   { card.classList.add('candidate'); card.style.borderColor = set.color; }
+          if (!isChosen && !isCand && s.type !== 'init') card.classList.add('exhausted');
+
+          const nameDiv = document.createElement('div');
+          nameDiv.className   = 'p5-sc-name';
+          nameDiv.style.color = set.color;
+          nameDiv.textContent = 'S'+(i+1);
+
+          const elemDiv = document.createElement('div');
+          elemDiv.className   = 'p5-sc-elems';
+          elemDiv.textContent = '{'+set.elems.join(', ')+'}';
+
+          card.appendChild(nameDiv);
+          card.appendChild(elemDiv);
+
+          if (newCov !== null && !isChosen) {
+            const covDiv = document.createElement('div');
+            covDiv.className   = 'p5-sc-new';
+            covDiv.textContent = '+'+newCov+' new';
+            if (isCand) covDiv.style.color = '#FFD600';
+            card.appendChild(covDiv);
+          }
+
+          row.appendChild(card);
+        }
+      }
+
+      // ── history ──
+      function addHistoryRow(row) {
+        historyLog.push(row);
+        if (historyLog.length > 40) historyLog.shift();
+        const tbody = document.getElementById('p5-historyBody');
+        tbody.innerHTML = '';
+        historyLog.forEach((r, i) => {
+          const tr = document.createElement('tr');
+          if (i === historyLog.length-1) tr.className = 'current';
+          tr.innerHTML = `<td>${r.round}</td><td>${r.setName}</td><td>${r.newCov}</td><td>${r.remaining}</td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.parentElement.scrollTop = tbody.parentElement.scrollHeight;
+      }
+
+      // ── load data ──
+      function loadData(U, S) {
+        universe = U;
+        sets = S.map((elems, i) => ({
+          elems, color: SET_COLORS[i % SET_COLORS.length], name: 'S'+(i+1)
+        }));
+        resetState();
+      }
+
+      function resetState() {
+        stopPlay();
+        stepIdx = -1; historyLog = [];
+        document.getElementById('p5-historyBody').innerHTML =
+          '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);font-family:var(--font-ui);">No steps yet</td></tr>';
+        document.getElementById('p5-explanationBox').innerHTML =
+          'Choose a preset or load custom data, then press <strong>Build</strong>.';
+        document.getElementById('p5-statusBadge').className = 'status-badge';
+        document.getElementById('p5-statusText').textContent = 'Idle';
+        document.getElementById('p5-stepCounter').textContent = '— / —';
+        document.getElementById('p5-statChosen').textContent  = '—';
+        document.getElementById('p5-statCovered').textContent = '—';
+        document.getElementById('p5-statUncov').textContent   = '—';
+        document.getElementById('p5-covFill').style.width = '0%';
+        document.getElementById('p5-covPct').textContent  = '0%';
+        setButtons(false);
+      }
+
+      function setButtons(built) {
+        document.getElementById('p5-btnBack').disabled  = !built;
+        document.getElementById('p5-btnStep').disabled  = !built;
+        document.getElementById('p5-btnPlay').disabled  = !built;
+        document.getElementById('p5-btnPause').disabled = true;
+        document.getElementById('p5-btnReset').disabled = !built;
+      }
+
+      function stopPlay() {
+        if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+        document.getElementById('p5-btnPause').disabled = true;
+        document.getElementById('p5-btnPlay').disabled  = steps.length === 0;
+      }
+
+      function advance() {
+        stepIdx++;
+        if (stepIdx >= steps.length) { stopPlay(); return; }
+        applyStep(stepIdx);
+        playTimer = setTimeout(advance, Math.round(1100 / speed));
+      }
+
+      // ── public ──
+      function build() {
+        buildSteps();
+        if (steps.length === 0) return;
+        stepIdx = 0;
+        applyStep(0);
+        document.getElementById('p5-vizIdleHint').style.display = 'none';
+        document.getElementById('p5-mainViz').style.display     = '';
+        document.getElementById('p5-approxBox').style.display   = '';
+        setButtons(true);
+        makePillController('p5-vizHero', 'p5-controlsPill');
+        document.getElementById('p5-controlsPill').classList.add('pinned');
+      }
+
+      return {
+        build,
+        back()  { stopPlay(); if(stepIdx>0){stepIdx--;applyStep(stepIdx);} },
+        step()  { stopPlay(); if(stepIdx<steps.length-1){stepIdx++;applyStep(stepIdx);} },
+        play()  {
+          if (playTimer) return;
+          if (stepIdx >= steps.length-1) stepIdx = -1;
+          document.getElementById('p5-btnPause').disabled = false;
+          document.getElementById('p5-btnPlay').disabled  = true;
+          advance();
+        },
+        pause() { stopPlay(); },
+        reset() { resetState(); build(); },
+        setSpeed(v) { speed = v; },
+        loadPreset(name) {
+          const p = PRESETS[name];
+          if (!p) return;
+          loadData(p.U, p.S);
+        },
+        loadCustom() {
+          try {
+            const parsed = JSON.parse(document.getElementById('p5-customInput').value);
+            if (!Array.isArray(parsed.U) || !Array.isArray(parsed.S)) throw new Error('Need U and S arrays.');
+            loadData(parsed.U, parsed.S);
+          } catch(e) { alert('Parse error: ' + e.message); }
+        },
+        init() {
+          loadData(PRESETS.classic.U, PRESETS.classic.S);
+        }
+      };
+    })();
+
+    // ── wire buttons ──
+    document.getElementById('p5-btnBuild').addEventListener('click', Part5.build);
+    document.getElementById('p5-btnBack').addEventListener('click',  Part5.back);
+    document.getElementById('p5-btnStep').addEventListener('click',  Part5.step);
+    document.getElementById('p5-btnPlay').addEventListener('click',  Part5.play);
+    document.getElementById('p5-btnPause').addEventListener('click', Part5.pause);
+    document.getElementById('p5-btnReset').addEventListener('click', Part5.reset);
+    document.getElementById('p5-speedSlider').addEventListener('input', function() {
+      const v = parseFloat(this.value);
+      document.getElementById('p5-speedValue').textContent = v + '×';
+      Part5.setSpeed(v);
+    });
+
+    // ═══════════════════════════════════════════════
+    // MODE CONTROLLER
+    // ═══════════════════════════════════════════════
+    const ModeController = (() => {
+      const overlay  = document.getElementById('modeOverlay');
+      const solving  = document.getElementById('solving-view');
+      const learning = document.getElementById('learning-view');
+
+      // How many sub-steps each page has (pages without sub-steps = 1)
+      const SUBSTEPS = { 1:3, 2:2, 3:3, 4:1, 5:3, 6:3, 7:2, 8:2, 9:2, 10:2 };
+      const TOTAL = 10;
+      let currentPage = 1;
+      let currentStep = 0; // 0 = nothing revealed yet
+      let playTimer = null;
+      const PLAY_DELAY = 3500; // ms per sub-step in auto-play
+
+      /* ── overlay helpers ── */
+      function dismiss() {
+        overlay.classList.add('fade-out');
+        setTimeout(() => { overlay.style.display = 'none'; }, 500);
+      }
+      function showSolving()  { dismiss(); solving.style.display  = 'block'; }
+      function showLearning() {
+        dismiss();
+        learning.style.display = 'block';
+        // auto-reveal step 1 of page 1 after a short pause
+        setTimeout(() => revealSubStep(currentPage, 1), 350);
+      }
+
+      /* ── sub-step reveal (idempotent: reveals 1..stepN, hides the rest) ── */
+      function revealSubStep(pageN, stepN) {
+        const page = document.getElementById('learn-p' + pageN);
+        if (!page) return;
+        // text steps
+        page.querySelectorAll('.lp-step').forEach(el => {
+          const n = parseInt(el.dataset.step, 10);
+          el.classList.toggle('revealed', n <= stepN);
+        });
+        // SVG layers
+        page.querySelectorAll('.svg-layer').forEach(el => {
+          const min = parseInt(el.dataset.minStep || '1', 10);
+          el.classList.toggle('revealed', min <= stepN);
+        });
+        currentStep = stepN;
+        updateUI();
+      }
+
+      function hideAllSteps(pageN) { revealSubStep(pageN, 0); }
+
+      /* ── page transition ── */
+      function goToPage(n) {
+        hideAllSteps(currentPage);
+        document.getElementById('learn-p' + currentPage).classList.remove('active');
+        currentPage = n;
+        currentStep = 0;
+        document.getElementById('learn-p' + currentPage).classList.add('active');
+        updateUI();
+        // reveal first sub-step automatically
+        setTimeout(() => revealSubStep(currentPage, 1), 200);
+      }
+
+      /* ── navigation: next advances sub-step first, then page ── */
+      function goNext() {
+        stopPlay();
+        const totalSteps = SUBSTEPS[currentPage] || 1;
+        if (currentStep < totalSteps) {
+          revealSubStep(currentPage, currentStep + 1);
+        } else if (currentPage < TOTAL) {
+          goToPage(currentPage + 1);
+        }
+      }
+
+      /* ── navigation: prev retreats sub-step first, then page ── */
+      function goPrev() {
+        stopPlay();
+        if (currentStep > 1) {
+          revealSubStep(currentPage, currentStep - 1);
+        } else if (currentPage > 1) {
+          hideAllSteps(currentPage);
+          document.getElementById('learn-p' + currentPage).classList.remove('active');
+          currentPage -= 1;
+          document.getElementById('learn-p' + currentPage).classList.add('active');
+          revealSubStep(currentPage, SUBSTEPS[currentPage] || 1); // show all steps of prev page
+        }
+      }
+
+      /* ── UI refresh ── */
+      function updateUI() {
+        const totalSteps = SUBSTEPS[currentPage] || 1;
+        const atStart = currentPage === 1 && currentStep <= 1;
+        const atEnd   = currentPage === TOTAL && currentStep >= totalSteps;
+        document.getElementById('learn-page-ind').textContent = currentPage + ' / ' + TOTAL;
+        document.getElementById('learn-statusText').textContent = 'Page ' + currentPage + ' of ' + TOTAL;
+        document.getElementById('learn-prev').disabled = atStart;
+        document.getElementById('learn-next').disabled = atEnd;
+        document.getElementById('learn-play').disabled = atEnd;
+      }
+
+      /* ── auto-play (advances one sub-step at a time) ── */
+      function stopPlay() {
+        if (playTimer) { clearInterval(playTimer); playTimer = null; }
+        document.getElementById('learn-pause').disabled = true;
+        const badge = document.getElementById('learn-statusBadge');
+        if (badge) badge.className = 'status-badge ready';
+        updateUI();
+      }
+
+      function startPlay() {
+        const totalSteps = SUBSTEPS[currentPage] || 1;
+        const atEnd = currentPage === TOTAL && currentStep >= totalSteps;
+        if (playTimer || atEnd) return;
+        document.getElementById('learn-play').disabled  = true;
+        document.getElementById('learn-pause').disabled = false;
+        const badge = document.getElementById('learn-statusBadge');
+        if (badge) badge.className = 'status-badge playing';
+        playTimer = setInterval(() => {
+          const ts = SUBSTEPS[currentPage] || 1;
+          if (currentPage === TOTAL && currentStep >= ts) { stopPlay(); return; }
+          if (currentStep < ts) {
+            revealSubStep(currentPage, currentStep + 1);
+          } else {
+            goToPage(currentPage + 1);
+          }
+        }, PLAY_DELAY);
+      }
+
+      /* ── wire up buttons ── */
+      document.getElementById('btn-solving').addEventListener('click', showSolving);
+      document.getElementById('btn-learning').addEventListener('click', showLearning);
+      document.getElementById('learn-switch').addEventListener('click', () => {
+        stopPlay();
+        learning.style.display = 'none';
+        solving.style.display  = 'block';
+      });
+      document.getElementById('learn-prev').addEventListener('click', goPrev);
+      document.getElementById('learn-next').addEventListener('click', goNext);
+      document.getElementById('learn-play').addEventListener('click', startPlay);
+      document.getElementById('learn-pause').addEventListener('click', stopPlay);
+
+      return { showSolving, showLearning, goToPage };
+    })();
+
+    // ═══════════════════════════════════════════════
+    // BOOT
+    // ═══════════════════════════════════════════════
+    ThemeController.init();
+    Part5.init();
+
+  </script>
+</body>
+</html>
