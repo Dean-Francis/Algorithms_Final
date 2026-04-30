@@ -775,6 +775,28 @@
           <div id="p4-drawTip" style="display:none; margin-top:var(--sp-sm); font-size:var(--text-xs); color:var(--accent);">
             Click on the canvas above to place the first endpoint, then click again for the second. Each pair = one segment.
           </div>
+          <div style="margin-top:var(--sp-md);">
+            <span class="presets-label">Custom Segment (normalized 0–1)</span>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:var(--sp-sm);margin-top:var(--sp-sm);align-items:flex-end;">
+              <div class="input-group">
+                <label class="input-label">X1</label>
+                <input type="number" class="input-field" id="p4-inX1" step="0.01" min="0.02" max="0.98" placeholder="0.10">
+              </div>
+              <div class="input-group">
+                <label class="input-label">Y1</label>
+                <input type="number" class="input-field" id="p4-inY1" step="0.01" min="0.02" max="0.98" placeholder="0.30">
+              </div>
+              <div class="input-group">
+                <label class="input-label">X2</label>
+                <input type="number" class="input-field" id="p4-inX2" step="0.01" min="0.02" max="0.98" placeholder="0.90">
+              </div>
+              <div class="input-group">
+                <label class="input-label">Y2</label>
+                <input type="number" class="input-field" id="p4-inY2" step="0.01" min="0.02" max="0.98" placeholder="0.70">
+              </div>
+              <button class="preset-btn" onclick="Part4.addFromInput()" style="height:36px;margin-bottom:1px;">+ Add</button>
+            </div>
+          </div>
           <div id="p4-segmentList" style="margin-top:var(--sp-sm); font-family:var(--font-mono); font-size:var(--text-xs); color:var(--text-secondary); line-height:1.8;"></div>
         </div>
       </div>
@@ -1137,6 +1159,7 @@
         });
 
         const active=[], foundPts=[];
+        const testedPairs=new Set();
 
         function getY(idx,x) {
           const s=segments[idx], dx=s.q.x-s.p.x;
@@ -1161,8 +1184,12 @@
             });
 
             const pairs=[];
-            if(pos>0) pairs.push([active[pos-1], ev.segIdx]);
-            if(pos<active.length-1) pairs.push([ev.segIdx, active[pos+1]]);
+            for(let k=0;k<active.length;k++){
+              const other=active[k];
+              if(other===ev.segIdx) continue;
+              const pKey=Math.min(other,ev.segIdx)+','+Math.max(other,ev.segIdx);
+              if(!testedPairs.has(pKey)){testedPairs.add(pKey);pairs.push([Math.min(other,ev.segIdx),Math.max(other,ev.segIdx)]);}
+            }
 
             for (const [ai,bi] of pairs) {
               const sa=segments[ai],sb=segments[bi];
@@ -1206,25 +1233,29 @@
 
             if (pos>0&&pos<active.length-1) {
               const ai=active[pos-1], bi=active[pos+1];
-              const sa=segments[ai],sb=segments[bi];
-              const hit=segsIntersect(sa,sb);
-              const d1=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.p.x,sb.p.y);
-              const d2=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.q.x,sb.q.y);
-              const cpD = 'orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.p) = '+(d1>0?'CW':d1<0?'CCW':'Col')+'<br>orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.q) = '+(d2>0?'CW':d2<0?'CCW':'Col');
+              const pKey=Math.min(ai,bi)+','+Math.max(ai,bi);
+              if(!testedPairs.has(pKey)){
+                testedPairs.add(pKey);
+                const sa=segments[ai],sb=segments[bi];
+                const hit=segsIntersect(sa,sb);
+                const d1=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.p.x,sb.p.y);
+                const d2=orientation(sa.p.x,sa.p.y,sa.q.x,sa.q.y,sb.q.x,sb.q.y);
+                const cpD = 'orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.p) = '+(d1>0?'CW':d1<0?'CCW':'Col')+'<br>orient(s'+(ai+1)+'.p,s'+(ai+1)+'.q, s'+(bi+1)+'.q) = '+(d2>0?'CW':d2<0?'CCW':'Col');
 
-              steps.push({
-                sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[[ai,bi]],
-                cpInfo:{detail:cpD, result:hit?'INTERSECT ✓':'No intersection', ok:hit},
-                expl:'New neighbors after removal: s'+(ai+1)+' and s'+(bi+1)+'. <strong>'+(hit?'INTERSECT':'No intersection')+'</strong>.',
-                logRow:{type:'TEST', seg:'s'+(ai+1)+'∩s'+(bi+1), detail:hit?'Intersect':'No intersect'},
-                pseudoLine:10
-              });
+                steps.push({
+                  sweepX:ev.x, activeIds:new Set(active), ints:[...foundPts], hlPairs:[[ai,bi]],
+                  cpInfo:{detail:cpD, result:hit?'INTERSECT ✓':'No intersection', ok:hit},
+                  expl:'New neighbors after removal: s'+(ai+1)+' and s'+(bi+1)+'. <strong>'+(hit?'INTERSECT':'No intersection')+'</strong>.',
+                  logRow:{type:'TEST', seg:'s'+(ai+1)+'∩s'+(bi+1), detail:hit?'Intersect':'No intersect'},
+                  pseudoLine:10
+                });
 
-              if (hit) {
-                const ipt=intersectionPt(sa,sb);
-                if (ipt) {
-                  const dup=foundPts.some(p=>Math.abs(p.x-ipt.x)<1e-6&&Math.abs(p.y-ipt.y)<1e-6);
-                  if (!dup) foundPts.push(ipt);
+                if (hit) {
+                  const ipt=intersectionPt(sa,sb);
+                  if (ipt) {
+                    const dup=foundPts.some(p=>Math.abs(p.x-ipt.x)<1e-6&&Math.abs(p.y-ipt.y)<1e-6);
+                    if (!dup) foundPts.push(ipt);
+                  }
                 }
               }
             }
@@ -1305,6 +1336,12 @@
           const tr=document.createElement('tr');
           if (i===historyLog.length-1) tr.className='current';
           tr.innerHTML=`<td>${r.stepNum+1}</td><td>${r.type}</td><td>${r.seg}</td><td>${r.detail}</td>`;
+          tr.style.cursor='pointer';
+          tr.addEventListener('click', ()=>{
+            stopPlay();
+            stepIdx=r.stepNum;
+            applyStep(stepIdx);
+          });
           tbody.appendChild(tr);
         });
         tbody.parentElement.scrollTop=tbody.parentElement.scrollHeight;
@@ -1420,7 +1457,13 @@
           document.getElementById('p4-btnPlay').disabled=true;
           advance();
         },
-        pause()   { stopPlay(); },
+        pause()   {
+          stopPlay();
+          if (stepIdx >= 0 && stepIdx < steps.length) {
+            document.getElementById('p4-statusBadge').className='status-badge paused';
+            document.getElementById('p4-statusText').textContent='Paused';
+          }
+        },
         reset()   { resetState(); build(); },
         redraw,
         setSpeed(v) { speed = v; },
@@ -1442,6 +1485,18 @@
           renderSegList();
           document.getElementById('p4-vizIdleHint').style.display='';
           canvas.style.display='none';
+        },
+        addFromInput() {
+          const x1=parseFloat(document.getElementById('p4-inX1').value);
+          const y1=parseFloat(document.getElementById('p4-inY1').value);
+          const x2=parseFloat(document.getElementById('p4-inX2').value);
+          const y2=parseFloat(document.getElementById('p4-inY2').value);
+          if ([x1,y1,x2,y2].some(isNaN)) return;
+          const clamp=v=>Math.max(0.02,Math.min(0.98,v));
+          const idx=segments.length;
+          segments.push({p:{x:clamp(x1),y:clamp(y1)},q:{x:clamp(x2),y:clamp(y2)},id:idx,color:PALETTE[idx%PALETTE.length]});
+          resetState();
+          renderSegList();
         },
         init() {
           resize();
